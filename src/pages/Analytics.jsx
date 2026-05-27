@@ -94,7 +94,7 @@ export default function Analytics() {
   const accountStartPeriod = getAccountStartPeriod(user?.createdAt);
 
   return (
-    <div className="space-y-5 max-w-6xl">
+    <div className="mx-auto w-full max-w-[1500px] space-y-5">
       <div>
         <h2 className="font-display font-bold text-xl">Analytics</h2>
         <p className="text-sm text-text-secondary mt-0.5">Deep financial insights</p>

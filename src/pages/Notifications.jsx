@@ -75,7 +75,7 @@ export default function Notifications() {
   };
 
   return (
-    <div className="max-w-2xl space-y-5">
+    <div className="mx-auto w-full max-w-[1100px] space-y-5">
       <ConfirmDialog
         isOpen={confirmDeleteAll}
         title="Delete all notifications?"

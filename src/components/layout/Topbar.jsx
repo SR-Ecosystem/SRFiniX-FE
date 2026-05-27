@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Menu, RefreshCw } from 'lucide-react';
-import { startOperation, toggleSidebar } from '../../features/ui/uiSlice';
+import { Bell, RefreshCw } from 'lucide-react';
+import { startOperation } from '../../features/ui/uiSlice';
 import { BrandLogo, ThemeToggle } from '../ui/index';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -65,17 +65,10 @@ export const Topbar = () => {
 
   return (
     <>
-      <header className="sticky top-0 z-10 flex h-[74px] items-center justify-between gap-3 overflow-hidden border-b border-border bg-bg-secondary/95 px-3 py-2 shadow-sm backdrop-blur-xl md:h-[76px] md:px-6 lg:px-8">
-        <div className="flex min-w-0 flex-1 flex-col justify-center lg:flex-none">
-          <div className="flex min-w-0 items-center gap-2 md:gap-3">
+      <header className="sticky top-0 z-10 flex h-[74px] items-center justify-between gap-3 overflow-hidden border-b border-border bg-bg-secondary/95 px-3 py-2 shadow-sm backdrop-blur-xl md:h-[72px] md:px-6 lg:px-8">
+        <div className="flex min-w-0 flex-1 flex-col justify-center md:hidden">
+          <div className="flex min-w-0 items-center gap-2">
             <BrandLogo size="md" className="h-8 w-8 flex-shrink-0 border border-border shadow-sm min-[420px]:h-9 min-[420px]:w-9 md:h-10 md:w-10 lg:h-11 lg:w-11" />
-            <button
-              onClick={() => dispatch(toggleSidebar())}
-              className="hidden h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl border border-border bg-bg-tertiary text-text-secondary transition-all hover:border-accent-green/30 hover:text-text-primary xl:flex"
-              aria-label="Toggle sidebar"
-            >
-              <Menu size={18} />
-            </button>
             <div className="min-w-0">
               <h1 className="min-w-0 truncate font-display text-xl font-bold leading-none text-text-primary min-[420px]:text-2xl md:text-[28px] lg:text-3xl">
                 SR<span className="text-accent-green">FiniX</span>
@@ -89,6 +82,15 @@ export const Topbar = () => {
                 </span>
               </p>
             </div>
+          </div>
+        </div>
+
+        <div className="hidden min-w-0 flex-1 items-center md:flex">
+          <div className="rounded-2xl border border-border bg-bg-tertiary/70 px-4 py-2 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted">Today</p>
+            <p className="mt-0.5 whitespace-nowrap text-sm font-medium text-text-secondary">
+              {dateTimeParts.map((part) => part.value).join('')}
+            </p>
           </div>
         </div>
 

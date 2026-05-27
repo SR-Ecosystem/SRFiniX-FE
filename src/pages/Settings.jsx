@@ -242,7 +242,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="max-w-5xl space-y-5">
+    <div className="mx-auto w-full max-w-[1500px] space-y-5">
       <ConfirmDialog
         isOpen={!!confirmAction}
         title={confirmAction?.title}

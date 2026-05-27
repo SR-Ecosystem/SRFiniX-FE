@@ -311,7 +311,7 @@ export default function Strategy() {
   };
 
   return (
-    <div className="space-y-5 max-w-3xl">
+    <div className="mx-auto w-full max-w-[1500px] space-y-5">
       <ConfirmDialog
         isOpen={!!confirmAction}
         title={confirmAction?.title}

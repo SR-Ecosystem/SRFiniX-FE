@@ -41,6 +41,14 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
+const SummaryTile = ({ label, value, helper, color }) => (
+  <div className="rounded-2xl border border-border bg-bg-secondary/80 p-4 shadow-sm">
+    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-muted">{label}</p>
+    <p className="mt-2 font-display text-2xl font-bold leading-none" style={{ color }}>{value}</p>
+    <p className="mt-2 text-xs text-text-secondary">{helper}</p>
+  </div>
+);
+
 export default function Dashboard() {
   const dispatch = useDispatch();
   const { overview, overviewKey, insights, insightsLoaded, monthly, monthlyKey, isLoading } = useSelector((s) => s.analytics);
@@ -127,22 +135,71 @@ export default function Dashboard() {
           : []),
       ]
     : [];
+  const savingsRate = overview?.totalIncome > 0
+    ? Math.max(0, Math.round(((overview?.netSavings || 0) / overview.totalIncome) * 100))
+    : 0;
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="mx-auto w-full max-w-[1500px] space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="font-display text-2xl font-bold leading-tight md:text-[26px]">Dashboard</h2>
-          <p className="text-sm text-text-secondary mt-0.5">Showing {getPeriodLabel(period)}</p>
+      <motion.section variants={item} className="overflow-hidden rounded-card border border-border bg-bg-secondary shadow-sm">
+        <div className="grid gap-5 p-5 lg:grid-cols-[1.2fr_1fr] xl:p-6">
+          <div className="flex min-w-0 flex-col justify-between gap-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-accent-green">Account overview</p>
+                <h2 className="mt-2 font-display text-3xl font-bold leading-tight text-text-primary">Dashboard</h2>
+                <p className="mt-1 text-sm text-text-secondary">Showing {getPeriodLabel(period)} financial activity.</p>
+              </div>
+              <PeriodFilter
+                period={period}
+                minPeriod={accountStartPeriod}
+                onApply={setPeriod}
+                compact
+                className="rounded-2xl border border-border bg-bg-tertiary p-1 shadow-sm"
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <SummaryTile
+                label="Saved Rate"
+                value={`${savingsRate}%`}
+                helper="Income retained this month"
+                color="#00A978"
+              />
+              <SummaryTile
+                label="Reserve"
+                value={formatCurrencyWithPaise(emergencyBalance)}
+                helper="Emergency fund balance"
+                color="#3E8EFF"
+              />
+              <SummaryTile
+                label="Strategy"
+                value={strategy?.name || 'Not set'}
+                helper={strategy ? `${displayStrategyDivisions.length} active allocations` : 'Create a budget plan'}
+                color="#7B6EF6"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-border bg-bg-tertiary p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-text-muted">Financial health</p>
+                <p className="mt-3 font-display text-5xl font-bold leading-none text-accent-green">{financialScore}%</p>
+                <p className="mt-2 text-sm text-text-secondary">{financialHealthLabel} momentum</p>
+              </div>
+              <IconBadge icon="target" color="#00E5A0" className="h-14 w-14 flex-shrink-0" iconClassName="h-7 w-7" />
+            </div>
+            <div className="mt-6">
+              <ProgressBar value={financialScore} color="#00E5A0" />
+              <div className="mt-3 flex justify-between text-xs text-text-muted">
+                <span>Needs work</span>
+                <span>Excellent</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <PeriodFilter
-          period={period}
-          minPeriod={accountStartPeriod}
-          onApply={setPeriod}
-          compact
-          className="rounded-xl border border-border bg-bg-secondary p-1 shadow-sm"
-        />
-      </div>
+      </motion.section>
 
       {/* Stat cards */}
       <motion.div variants={item} className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6">
@@ -196,48 +253,62 @@ export default function Dashboard() {
         />
       </motion.div>
 
-      <motion.div variants={item} className="card">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <IconBadge icon="shield" color="#3E8EFF" className="h-12 w-12 flex-shrink-0" iconClassName="h-6 w-6" />
+      <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+        <motion.div variants={item} className="card">
+          <div className="flex h-full flex-col justify-between gap-5">
+            <div className="flex items-center gap-3">
+              <IconBadge icon="shield" color="#3E8EFF" className="h-12 w-12 flex-shrink-0" iconClassName="h-6 w-6" />
+              <div>
+                <h3 className="font-display font-semibold">Emergency Funds</h3>
+                <p className="text-xs text-text-muted">Reserve from approved unused monthly allocation.</p>
+              </div>
+            </div>
             <div>
-              <h3 className="font-display font-semibold">Emergency Funds</h3>
-              <p className="text-xs text-text-muted">
-                Unspent monthly allocation moves here after your approval.
-              </p>
+              {dashboardLoading ? (
+                <div className="space-y-2">
+                  <div className="h-8 w-36 animate-pulse rounded-lg bg-bg-card" />
+                  <div className="h-3 w-28 animate-pulse rounded bg-bg-card" />
+                </div>
+              ) : (
+                <>
+                  <p className="font-display text-3xl font-bold text-accent-blue">{formatCurrencyWithPaise(emergencyBalance)}</p>
+                  <p className="mt-1 text-xs text-text-muted">
+                    {overview?.lastEmergencyRollover ? `Last rollover: ${overview.lastEmergencyRollover}` : 'No rollover yet'}
+                  </p>
+                </>
+              )}
             </div>
           </div>
-          <div className="text-left sm:text-right">
-            {dashboardLoading ? (
-              <div className="ml-auto space-y-2">
-                <div className="h-6 w-28 animate-pulse rounded-lg bg-bg-card" />
-                <div className="h-3 w-20 animate-pulse rounded bg-bg-card" />
-              </div>
-            ) : (
-              <>
-                <p className="font-display text-xl font-bold text-accent-blue">{formatCurrencyWithPaise(emergencyBalance)}</p>
-                <p className="text-xs text-text-muted">
-                  {overview?.lastEmergencyRollover ? `Last rollover: ${overview.lastEmergencyRollover}` : 'No rollover yet'}
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      </motion.div>
+        </motion.div>
 
-      <motion.div variants={item} className="card">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <h3 className="font-display font-semibold">Financial Health</h3>
-            <p className="text-xs text-text-muted">Single score based on savings, goals, and spending.</p>
+        <motion.div variants={item} className="card">
+          <div className="grid h-full gap-5 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div>
+              <h3 className="font-display font-semibold">Monthly control</h3>
+              <p className="mt-1 text-xs text-text-muted">Compare income, spending, and remaining balance at a glance.</p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-bg-tertiary p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-text-muted">Income</p>
+                  <p className="mt-1 font-display text-lg font-bold text-accent-green">{formatCompact(overview?.totalIncome || 0)}</p>
+                </div>
+                <div className="rounded-2xl bg-bg-tertiary p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-text-muted">Expense</p>
+                  <p className="mt-1 font-display text-lg font-bold text-accent-red">{formatCompact(overview?.totalExpense || 0)}</p>
+                </div>
+                <div className="rounded-2xl bg-bg-tertiary p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-text-muted">Left</p>
+                  <p className="mt-1 font-display text-lg font-bold text-accent-orange">{formatCompact(overview?.netSavings || 0)}</p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-3xl border border-accent-orange/20 bg-accent-orange/10 p-5 text-center">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">Saved</p>
+              <p className="mt-2 font-display text-4xl font-bold text-accent-orange">{savingsRate}%</p>
+              <p className="mt-1 text-xs text-text-secondary">Of income retained</p>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="font-display text-xl font-bold text-accent-green">{financialScore}%</p>
-            <p className="text-xs text-text-muted">{financialHealthLabel}</p>
-          </div>
-        </div>
-        <ProgressBar value={financialScore} color="#00E5A0" />
-      </motion.div>
+        </motion.div>
+      </div>
 
       {/* Chart + Strategy */}
       <div className="grid gap-5 xl:grid-cols-5">
@@ -257,7 +328,7 @@ export default function Dashboard() {
           {dashboardLoading ? (
             <ComponentLoader label="Loading chart..." />
           ) : (
-            <ResponsiveContainer width="100%" height={180}>
+            <ResponsiveContainer width="100%" height={260}>
               <BarChart data={chartData} barSize={8} barCategoryGap="30%">
                 <XAxis dataKey="name" tick={{ fill: '#555C72', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#555C72', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v/1000}K`} width={45} />

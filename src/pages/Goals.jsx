@@ -127,7 +127,7 @@ export default function Goals() {
   const filtered = list.filter((g) => tab === 'active' ? !g.isCompleted : g.isCompleted);
 
   return (
-    <div className="space-y-5 max-w-5xl">
+    <div className="mx-auto w-full max-w-[1500px] space-y-5">
       <GoalModal isOpen={showCreate} onClose={() => setShowCreate(false)} />
       {contributeGoal && <ContributeModal goal={contributeGoal} onClose={() => setContributeGoal(null)} />}
       <ConfirmDialog
