@@ -144,7 +144,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stat cards */}
-      <motion.div variants={item} className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6">
+      <motion.div variants={item} className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
         <StatCard
           label="This Month Income"
           value={formatCurrencyWithPaise(overview?.totalIncome || 0)}
@@ -243,13 +243,13 @@ export default function Dashboard() {
       {/* Chart + Strategy */}
       <div className="grid gap-5 xl:grid-cols-5">
         {/* Income vs Expenses chart */}
-        <motion.div variants={item} className="card xl:col-span-3">
-          <div className="flex items-center justify-between mb-5">
+        <motion.div variants={item} className="card flex h-full flex-col xl:col-span-3">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="font-display font-semibold">Income vs Expenses</h3>
               <p className="text-xs text-text-muted mt-0.5">{period.year} overview</p>
             </div>
-            <div className="flex gap-3 text-xs text-text-secondary">
+            <div className="flex flex-wrap gap-3 text-xs text-text-secondary">
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent-green inline-block" />Income</span>
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent-purple inline-block" />Expenses</span>
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent-orange inline-block" />Savings</span>
@@ -258,8 +258,9 @@ export default function Dashboard() {
           {dashboardLoading ? (
             <ComponentLoader label="Loading chart..." />
           ) : (
-            <ResponsiveContainer width="100%" height={210}>
-              <BarChart data={chartData} barSize={8} barCategoryGap="30%">
+            <div className="min-h-[300px] flex-1">
+              <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} barSize={12} barCategoryGap="22%">
                 <XAxis dataKey="name" tick={{ fill: '#555C72', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: '#555C72', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `₹${v/1000}K`} width={45} />
                 <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
@@ -267,7 +268,8 @@ export default function Dashboard() {
                 <Bar dataKey="Expenses" fill="#7B6EF6" radius={[4, 4, 0, 0]} opacity={0.85} />
                 <Bar dataKey="Savings" fill="#F7931A" radius={[4, 4, 0, 0]} opacity={0.85} />
               </BarChart>
-            </ResponsiveContainer>
+              </ResponsiveContainer>
+            </div>
           )}
         </motion.div>
 
