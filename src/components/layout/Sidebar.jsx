@@ -49,18 +49,18 @@ export const Sidebar = ({ isOpen }) => {
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: -220, opacity: 0 }}
           transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-          className="hidden md:flex w-[220px] flex-shrink-0 bg-bg-secondary border-r border-white/[0.07] flex-col h-screen sticky top-0"
+          className="hidden h-screen w-[232px] flex-shrink-0 flex-col border-r border-border bg-bg-secondary md:flex xl:w-[244px]"
         >
-          <div className="p-6 pb-7">
+          <div className="px-6 pb-7 pt-7">
             <div className="flex items-center gap-2.5">
-              <BrandLogo size="sm" />
-              <span className="font-display font-bold text-lg">
+              <BrandLogo size="sm" className="h-9 w-9" />
+              <span className="font-display text-xl font-bold leading-none">
                 SR<span className="text-accent-green">FiniX</span>
               </span>
             </div>
           </div>
 
-          <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
+          <nav className="flex-1 space-y-1 overflow-y-auto px-3">
             <p className="text-[10px] text-text-muted uppercase tracking-[1.5px] px-3 mb-2">Menu</p>
             {navItems.map(({ path, icon: Icon, label }) => (
               <NavLink
@@ -74,7 +74,7 @@ export const Sidebar = ({ isOpen }) => {
               </NavLink>
             ))}
 
-            <p className="text-[10px] text-text-muted uppercase tracking-[1.5px] px-3 mt-5 mb-2">Insights</p>
+            <p className="text-[10px] text-text-muted uppercase tracking-[1.5px] px-3 mt-6 mb-2">Insights</p>
             {bottomItems.map(({ path, icon: Icon, label }) => (
               <NavLink
                 key={path}
@@ -93,7 +93,7 @@ export const Sidebar = ({ isOpen }) => {
           </nav>
 
           <div className="p-3">
-            <div className="bg-bg-tertiary rounded-xl p-3">
+            <div className="rounded-2xl border border-border bg-bg-tertiary p-3">
               <div className="flex items-center gap-2.5 mb-3">
                 {user?.avatarUrl || user?.avatar ? (
                   <img

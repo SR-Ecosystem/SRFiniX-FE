@@ -45,7 +45,7 @@
 
 @layer components {
   .card {
-    @apply bg-bg-secondary border border-border rounded-card p-4 md:p-6 shadow-sm;
+    @apply bg-bg-secondary border border-border rounded-card p-4 md:p-5 xl:p-6 shadow-sm;
   }
 
   .card-sm {
@@ -100,7 +100,7 @@
   }
 
   .stat-card {
-    @apply card relative overflow-hidden cursor-pointer transition-all duration-150 hover:border-white/15;
+    @apply card relative min-h-[132px] overflow-hidden cursor-pointer transition-all duration-150 hover:border-white/15;
   }
 
   .glass {

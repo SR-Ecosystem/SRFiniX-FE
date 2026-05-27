@@ -129,10 +129,10 @@ export default function Dashboard() {
     : [];
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-5 max-w-7xl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <motion.div variants={container} initial="hidden" animate="show" className="mx-auto w-full max-w-[1500px] space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="font-display font-bold text-xl">Dashboard</h2>
+          <h2 className="font-display text-2xl font-bold leading-tight md:text-[26px]">Dashboard</h2>
           <p className="text-sm text-text-secondary mt-0.5">Showing {getPeriodLabel(period)}</p>
         </div>
         <PeriodFilter
@@ -145,7 +145,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stat cards */}
-      <motion.div variants={item} className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
+      <motion.div variants={item} className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6">
         <StatCard
           label="This Month Income"
           value={formatCurrencyWithPaise(overview?.totalIncome || 0)}
@@ -240,9 +240,9 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Chart + Strategy */}
-      <div className="grid lg:grid-cols-5 gap-5">
+      <div className="grid gap-5 xl:grid-cols-5">
         {/* Income vs Expenses chart */}
-        <motion.div variants={item} className="card lg:col-span-3">
+        <motion.div variants={item} className="card xl:col-span-3">
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="font-display font-semibold">Income vs Expenses</h3>
@@ -271,7 +271,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Strategy donut */}
-        <motion.div variants={item} className="card lg:col-span-2">
+        <motion.div variants={item} className="card xl:col-span-2">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-display font-semibold">{strategy?.name || 'Strategy'}</h3>
@@ -314,9 +314,9 @@ export default function Dashboard() {
       </div>
 
       {/* Transactions + Goals + Insights */}
-      <div className="grid lg:grid-cols-3 gap-5">
+      <div className="grid gap-5 xl:grid-cols-3">
         {/* Recent transactions */}
-        <motion.div variants={item} className="card lg:col-span-1">
+        <motion.div variants={item} className="card xl:col-span-1">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display font-semibold">Recent Transactions</h3>
             <Link to="/expenses" className="text-xs text-accent-green hover:underline">View all</Link>
@@ -350,7 +350,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* Goals */}
-        <motion.div variants={item} className="card lg:col-span-1">
+        <motion.div variants={item} className="card xl:col-span-1">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display font-semibold">Active Goals</h3>
             <Link to="/goals" className="text-xs text-accent-green hover:underline">View all</Link>
@@ -385,7 +385,7 @@ export default function Dashboard() {
         </motion.div>
 
         {/* AI Insights */}
-        <motion.div variants={item} className="card lg:col-span-1 bg-gradient-to-br from-accent-purple/10 to-accent-green/5 border-accent-purple/20">
+        <motion.div variants={item} className="card border-accent-purple/20 bg-gradient-to-br from-accent-purple/10 to-accent-green/5 xl:col-span-1">
           <div className="mb-1 flex items-center gap-2">
             <IconBadge icon="bot" color="#7B6EF6" className="h-8 w-8" />
             <h3 className="font-display font-semibold">AI Insights</h3>
