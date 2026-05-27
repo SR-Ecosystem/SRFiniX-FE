@@ -100,7 +100,7 @@
   }
 
   .stat-card {
-    @apply card relative min-h-[132px] overflow-hidden cursor-pointer transition-all duration-150 hover:border-white/15;
+    @apply card relative min-h-[116px] overflow-hidden cursor-pointer transition-all duration-150 hover:border-white/15;
   }
 
   .glass {
