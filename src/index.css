@@ -5,6 +5,28 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --color-bg-primary: #f6f8fb;
+    --color-bg-secondary: #ffffff;
+    --color-bg-tertiary: #eef2f7;
+    --color-bg-card: #e2e8f0;
+    --color-border: rgba(15, 23, 42, 0.12);
+    --color-text-primary: #111827;
+    --color-text-secondary: #4b5563;
+    --color-text-muted: #7c8798;
+  }
+
+  .dark {
+    --color-bg-primary: #0A0C10;
+    --color-bg-secondary: #111318;
+    --color-bg-tertiary: #181B22;
+    --color-bg-card: #1E2229;
+    --color-border: rgba(255, 255, 255, 0.07);
+    --color-text-primary: #F0F2F8;
+    --color-text-secondary: #8B91A7;
+    --color-text-muted: #555C72;
+  }
+
   * { box-sizing: border-box; }
   
   html { scroll-behavior: smooth; }
@@ -23,11 +45,11 @@
 
 @layer components {
   .card {
-    @apply bg-bg-secondary border border-white/[0.07] rounded-card p-4 md:p-6;
+    @apply bg-bg-secondary border border-border rounded-card p-4 md:p-6 shadow-sm;
   }
 
   .card-sm {
-    @apply bg-bg-secondary border border-white/[0.07] rounded-xl p-4;
+    @apply bg-bg-secondary border border-border rounded-xl p-4 shadow-sm;
   }
 
   .btn-primary {
@@ -38,7 +60,7 @@
   }
 
   .btn-secondary {
-    @apply bg-bg-tertiary border border-white/[0.07] text-text-primary font-medium
+    @apply bg-bg-tertiary border border-border text-text-primary font-medium
            rounded-xl px-5 py-2.5 text-sm transition-all duration-150
            hover:border-white/20 active:scale-95;
   }
@@ -48,7 +70,7 @@
   }
 
   .input {
-    @apply w-full bg-bg-tertiary border border-white/[0.07] rounded-xl px-4 py-3
+    @apply w-full bg-bg-tertiary border border-border rounded-xl px-4 py-3
            text-text-primary text-base md:text-sm placeholder:text-text-muted
            focus:outline-none focus:border-accent-green/50 transition-colors;
   }
@@ -98,7 +120,7 @@
   }
 
   .modal-content {
-    @apply bg-bg-secondary border border-white/[0.07] rounded-2xl w-full max-w-md
+    @apply bg-bg-secondary border border-border rounded-2xl w-full max-w-md
            max-h-[90vh] overflow-y-auto animate-slide-up;
   }
 
@@ -128,5 +150,53 @@
 
   .touch-pan-y {
     touch-action: pan-y;
+  }
+
+  .sr-interactive-active {
+    transform: scale(0.985);
+  }
+
+  button,
+  a,
+  [role='button'],
+  input[type='checkbox'],
+  input[type='radio'],
+  select {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:not(:disabled),
+  a,
+  [role='button'] {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .sr-interaction-ripple {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0.18;
+    transform: scale(0);
+    animation: sr-ripple 520ms ease-out forwards;
+  }
+
+  @keyframes sr-ripple {
+    to {
+      opacity: 0;
+      transform: scale(2.4);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sr-interactive-active {
+      transform: none;
+    }
+
+    .sr-interaction-ripple {
+      display: none;
+    }
   }
 }

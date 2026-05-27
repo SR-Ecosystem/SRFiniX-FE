@@ -16,14 +16,27 @@ export const deleteNotification = createAsyncThunk('notifications/delete', async
   await notificationAPI.delete(id);
   return id;
 });
+export const deleteAllNotifications = createAsyncThunk('notifications/deleteAll', async (_, { rejectWithValue }) => {
+  try {
+    const res = await notificationAPI.deleteAll();
+    return res.data;
+  } catch (e) {
+    return rejectWithValue(e.response?.data?.message || 'Failed to delete notifications');
+  }
+});
 
 const notificationSlice = createSlice({
   name: 'notifications',
-  initialState: { list: [], unreadCount: 0, isLoading: false, error: null },
+  initialState: { list: [], unreadCount: 0, loaded: false, isLoading: false, error: null },
   reducers: {},
   extraReducers: (b) => {
     b.addCase(fetchNotifications.pending, (s) => { s.isLoading = true; s.error = null; });
-    b.addCase(fetchNotifications.fulfilled, (s, a) => { s.isLoading = false; s.list = a.payload.notifications; s.unreadCount = a.payload.unreadCount; });
+    b.addCase(fetchNotifications.fulfilled, (s, a) => {
+      s.isLoading = false;
+      s.loaded = true;
+      s.list = a.payload.notifications;
+      s.unreadCount = a.payload.unreadCount;
+    });
     b.addCase(fetchNotifications.rejected, (s, a) => { s.isLoading = false; s.error = a.payload || 'Failed to load notifications'; });
     b.addCase(markAllRead.fulfilled, (s) => { s.unreadCount = 0; s.list = s.list.map((n) => ({ ...n, isRead: true })); });
     b.addCase(markRead.fulfilled, (s, a) => {
@@ -37,6 +50,10 @@ const notificationSlice = createSlice({
       const notification = s.list.find((n) => n._id === a.payload);
       if (notification && !notification.isRead) s.unreadCount = Math.max(0, s.unreadCount - 1);
       s.list = s.list.filter((n) => n._id !== a.payload);
+    });
+    b.addCase(deleteAllNotifications.fulfilled, (s) => {
+      s.list = [];
+      s.unreadCount = 0;
     });
   },
 });

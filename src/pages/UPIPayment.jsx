@@ -11,7 +11,7 @@ import { fetchNotifications } from '../features/notifications/notificationSlice'
 import { expenseAPI } from '../api/expense.api';
 import { paymentAPI } from '../api/payment.api';
 import { Button, Input, Select } from '../components/ui/index';
-import { formatCurrency, timeAgo } from '../utils/formatters';
+import { formatCurrency, parseMoneyInput, timeAgo } from '../utils/formatters';
 import { CATEGORIES } from '../constants/categories';
 import toast from 'react-hot-toast';
 
@@ -73,7 +73,7 @@ const makeUPIQuery = (data, { includeAmount = true } = {}) => {
   params.set('pa', cleanUPIText(data.pa));
   params.set('pn', cleanUPIText(data.pn, data.pa));
   if (includeAmount && validateAmountOnly(data.am)) {
-    params.set('am', String(Number(data.am).toFixed(2)));
+    params.set('am', String(parseMoneyInput(data.am).toFixed(2)));
   }
   params.set('cu', 'INR');
   params.set('tn', cleanUPIText(data.tn, 'SRFiniX payment'));
@@ -96,14 +96,14 @@ const makeGenericAndroidIntentLink = () => (
 const makeP2PUPIData = (data, details) => ({
   pa: data.pa,
   pn: data.pn || data.pa.split('@')[0],
-  am: Number(details.amount),
+  am: parseMoneyInput(details.amount),
   tn: details.description || 'SRFiniX payment',
 });
 
 const makeNativeUPIPayload = (data, { includeAmount = true } = {}) => ({
   upiId: cleanUPIText(data.pa),
   name: cleanUPIText(data.pn, data.pa),
-  amount: includeAmount && validateAmountOnly(data.am) ? String(Number(data.am).toFixed(2)) : '',
+  amount: includeAmount && validateAmountOnly(data.am) ? String(parseMoneyInput(data.am).toFixed(2)) : '',
   note: cleanUPIText(data.tn, 'SRFiniX payment'),
 });
 
@@ -115,7 +115,7 @@ const makePendingPayment = (upiData, expense, selectedAppName) => ({
 });
 
 const validateAmountOnly = (amount) => {
-  const value = Number(amount);
+  const value = parseMoneyInput(amount);
   return Number.isFinite(value) && value > 0;
 };
 
@@ -363,7 +363,7 @@ export default function UPIPayment() {
   };
 
   const validatePayment = () => {
-    const amount = Number(expense.amount);
+    const amount = parseMoneyInput(expense.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       toast.error('Enter a valid payment amount.');
       return false;
@@ -414,7 +414,7 @@ export default function UPIPayment() {
       await loadRazorpayCheckout();
 
       const expensePayload = {
-        amount: Number(expense.amount),
+        amount: parseMoneyInput(expense.amount),
         category: expense.category,
         description: expense.description || 'UPI Payment',
         notes: 'Verified through Razorpay Checkout',
@@ -515,7 +515,7 @@ export default function UPIPayment() {
     const data = payment?.upiData || upiData;
     const details = payment?.expense || expense;
     const appName = payment?.selectedAppName || 'UPI';
-    const amount = Number(details.amount);
+    const amount = parseMoneyInput(details.amount);
 
     if (!Number.isFinite(amount) || amount <= 0) {
       toast.error('Payment details are incomplete.');
@@ -789,7 +789,7 @@ export default function UPIPayment() {
 
             <div className="rounded-2xl bg-bg-tertiary p-4">
               <p className="text-xs text-text-muted">Amount</p>
-              <p className="font-display text-2xl font-bold text-accent-green">{formatCurrency(Number(pendingPayment.expense.amount))}</p>
+              <p className="font-display text-2xl font-bold text-accent-green">{formatCurrency(parseMoneyInput(pendingPayment.expense.amount))}</p>
               <p className="mt-1 break-all text-xs text-text-secondary">to {pendingPayment.upiData.pn || pendingPayment.upiData.pa}</p>
             </div>
 
@@ -809,7 +809,7 @@ export default function UPIPayment() {
             </p>
             <div className="mt-5 rounded-2xl bg-bg-tertiary p-4">
               <p className="text-xs text-text-muted">Amount</p>
-              <p className="font-display text-2xl font-bold text-accent-green">{formatCurrency(Number(pendingPayment.expense.amount))}</p>
+              <p className="font-display text-2xl font-bold text-accent-green">{formatCurrency(parseMoneyInput(pendingPayment.expense.amount))}</p>
               <p className="mt-1 break-all text-xs text-text-secondary">{pendingPayment.expense.description || 'Manual UPI payment'}</p>
             </div>
             <Button onClick={() => setStep('returnConfirm')} className="mx-auto mt-6">
@@ -826,7 +826,7 @@ export default function UPIPayment() {
               Did you complete this UPI payment successfully?
             </p>
             <div className="mt-5 rounded-2xl bg-bg-tertiary p-4">
-              <p className="font-display text-2xl font-bold text-accent-green">{formatCurrency(Number(pendingPayment.expense.amount))}</p>
+              <p className="font-display text-2xl font-bold text-accent-green">{formatCurrency(parseMoneyInput(pendingPayment.expense.amount))}</p>
               <p className="mt-1 break-all text-xs text-text-secondary">{pendingPayment.expense.description || 'Manual UPI payment'}</p>
             </div>
             <div className="mt-6 grid grid-cols-2 gap-3">

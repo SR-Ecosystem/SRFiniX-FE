@@ -24,11 +24,17 @@ export const fetchCategoryBreakdown = createAsyncThunk('expenses/categories', as
 
 const expenseSlice = createSlice({
   name: 'expenses',
-  initialState: { list: [], total: 0, pages: 1, page: 1, categoryData: [], isLoading: false, error: null, filters: {} },
+  initialState: { list: [], total: 0, pages: 1, page: 1, categoryData: [], queryKey: null, isLoading: false, error: null, filters: {} },
   reducers: { setFilters: (s, a) => { s.filters = a.payload; } },
   extraReducers: (b) => {
     b.addCase(fetchExpenses.pending, (s) => { s.isLoading = true; });
-    b.addCase(fetchExpenses.fulfilled, (s, a) => { s.isLoading = false; s.list = a.payload.expenses; s.total = a.payload.total; s.pages = a.payload.pages; });
+    b.addCase(fetchExpenses.fulfilled, (s, a) => {
+      s.isLoading = false;
+      s.list = a.payload.expenses;
+      s.total = a.payload.total;
+      s.pages = a.payload.pages;
+      s.queryKey = JSON.stringify(a.meta.arg || {});
+    });
     b.addCase(fetchExpenses.rejected, (s, a) => { s.isLoading = false; s.error = a.payload; });
     b.addCase(addExpense.fulfilled, (s, a) => { s.list.unshift(a.payload.expense); });
     b.addCase(updateExpense.fulfilled, (s, a) => { const i = s.list.findIndex((e) => e._id === a.payload.expense._id); if (i > -1) s.list[i] = a.payload.expense; });

@@ -24,15 +24,37 @@ export const fetchWeekly = createAsyncThunk('analytics/weekly', async (_, { reje
 
 const analyticsSlice = createSlice({
   name: 'analytics',
-  initialState: { overview: null, daily: null, monthly: null, weekly: null, insights: [], isLoading: false },
+  initialState: {
+    overview: null,
+    overviewKey: null,
+    daily: null,
+    dailyKey: null,
+    monthly: null,
+    monthlyKey: null,
+    weekly: null,
+    weeklyLoaded: false,
+    insights: [],
+    insightsLoaded: false,
+    isLoading: false,
+  },
   reducers: {},
   extraReducers: (b) => {
     b.addCase(fetchOverview.pending, (s) => { s.isLoading = true; });
-    b.addCase(fetchOverview.fulfilled, (s, a) => { s.isLoading = false; s.overview = a.payload.overview; });
-    b.addCase(fetchDaily.fulfilled, (s, a) => { s.daily = a.payload; });
-    b.addCase(fetchMonthly.fulfilled, (s, a) => { s.monthly = a.payload; });
-    b.addCase(fetchInsights.fulfilled, (s, a) => { s.insights = a.payload.insights; });
-    b.addCase(fetchWeekly.fulfilled, (s, a) => { s.weekly = a.payload; });
+    b.addCase(fetchOverview.fulfilled, (s, a) => {
+      s.isLoading = false;
+      s.overview = a.payload.overview;
+      s.overviewKey = `${a.meta.arg?.year || ''}-${a.meta.arg?.month || ''}`;
+    });
+    b.addCase(fetchDaily.fulfilled, (s, a) => {
+      s.daily = a.payload;
+      s.dailyKey = `${a.meta.arg?.year || ''}-${a.meta.arg?.month || ''}`;
+    });
+    b.addCase(fetchMonthly.fulfilled, (s, a) => {
+      s.monthly = a.payload;
+      s.monthlyKey = `${a.meta.arg?.year || ''}`;
+    });
+    b.addCase(fetchInsights.fulfilled, (s, a) => { s.insights = a.payload.insights; s.insightsLoaded = true; });
+    b.addCase(fetchWeekly.fulfilled, (s, a) => { s.weekly = a.payload; s.weeklyLoaded = true; });
   },
 });
 export default analyticsSlice.reducer;

@@ -2,9 +2,12 @@ import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { motion } from 'framer-motion';
 import { fetchDaily, fetchInsights, fetchMonthly, fetchOverview, fetchWeekly } from '../features/analytics/analyticsSlice';
-import { ProgressBar, Spinner, StatCard } from '../components/ui/index';
-import { formatCompact, formatCurrency } from '../utils/formatters';
+import { ComponentLoader, IconBadge, ProgressBar, StatCard } from '../components/ui/index';
+import { formatCompact, formatCurrency, getAccountStartPeriod, getCurrentPeriod } from '../utils/formatters';
 import { CATEGORIES } from '../constants/categories';
+import { PeriodFilter } from '../components/ui/PeriodFilter';
+import { periodKey, shouldFetchKey } from '../utils/cacheKeys';
+import { useState } from 'react';
 import {
   Bar,
   BarChart,
@@ -39,16 +42,30 @@ const ChartTooltip = ({ active, payload, label }) => {
 
 export default function Analytics() {
   const dispatch = useDispatch();
-  const { overview, daily, monthly, insights, weekly, isLoading } = useSelector((s) => s.analytics);
+  const {
+    overview,
+    overviewKey,
+    daily,
+    dailyKey,
+    monthly,
+    monthlyKey,
+    insights,
+    insightsLoaded,
+    weekly,
+    weeklyLoaded,
+    isLoading,
+  } = useSelector((s) => s.analytics);
+  const { user } = useSelector((s) => s.auth);
+  const [period, setPeriod] = useState(getCurrentPeriod());
 
   useEffect(() => {
-    const year = new Date().getFullYear();
-    dispatch(fetchOverview({}));
-    dispatch(fetchDaily({}));
-    dispatch(fetchMonthly({ year }));
-    dispatch(fetchWeekly());
-    dispatch(fetchInsights());
-  }, [dispatch]);
+    const key = periodKey(period);
+    if (shouldFetchKey(overviewKey, key)) dispatch(fetchOverview(period));
+    if (shouldFetchKey(dailyKey, key)) dispatch(fetchDaily(period));
+    if (shouldFetchKey(monthlyKey, String(period.year))) dispatch(fetchMonthly({ year: period.year }));
+    if (!weeklyLoaded) dispatch(fetchWeekly());
+    if (!insightsLoaded) dispatch(fetchInsights());
+  }, [dispatch, period, overviewKey, dailyKey, monthlyKey, weeklyLoaded, insightsLoaded]);
 
   const dailyChartData = daily?.days?.map((day) => ({
     name: String(day.day),
@@ -74,9 +91,15 @@ export default function Analytics() {
     .sort((a, b) => b.value - a.value);
 
   const totalExpense = overview?.totalExpense || 0;
+  const accountStartPeriod = getAccountStartPeriod(user?.createdAt);
 
   return (
     <div className="space-y-5 max-w-6xl">
+      <div>
+        <h2 className="font-display font-bold text-xl">Analytics</h2>
+        <p className="text-sm text-text-secondary mt-0.5">Deep financial insights</p>
+      </div>
+
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard label="Total Income" value={formatCompact(overview?.totalIncome || 0)} icon="+" color="#00E5A0" delta={`${overview?.savingsRate || 0}% savings rate`} />
         <StatCard label="Total Spent" value={formatCompact(overview?.totalExpense || 0)} icon="-" color="#FF4B6B" delta={overview?.expenseDelta !== undefined ? `${Math.abs(overview.expenseDelta)}% vs last month` : ''} />
@@ -85,12 +108,15 @@ export default function Analytics() {
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="card">
-        <div className="mb-5">
-          <h3 className="font-display font-semibold">Daily Analysis</h3>
-          <p className="text-xs text-text-muted mt-0.5">Income, expenses, and savings by day</p>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-display font-semibold">Daily Analysis</h3>
+            <p className="text-xs text-text-muted mt-0.5">Income, expenses, and savings by day</p>
+          </div>
+          <PeriodFilter period={period} minPeriod={accountStartPeriod} onChange={setPeriod} compact className="rounded-xl border border-border bg-bg-secondary p-1 shadow-sm" />
         </div>
         {isLoading ? (
-          <div className="h-56 flex items-center justify-center"><Spinner /></div>
+          <ComponentLoader label="Loading analytics..." />
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={dailyChartData}>
@@ -110,7 +136,7 @@ export default function Analytics() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5">
           <div>
             <h3 className="font-display font-semibold">Monthly Analysis</h3>
-            <p className="text-xs text-text-muted mt-0.5">{new Date().getFullYear()} comparison</p>
+            <p className="text-xs text-text-muted mt-0.5">{period.year} comparison</p>
           </div>
           <div className="flex gap-4 text-xs text-text-secondary">
             {[['Income', '#00E5A0'], ['Expenses', '#7B6EF6'], ['Savings', '#F7931A']].map(([name, color]) => (
@@ -136,7 +162,10 @@ export default function Analytics() {
 
       <div className="grid lg:grid-cols-2 gap-5">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card">
-          <h3 className="font-display font-semibold mb-4">Category Analysis</h3>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-display font-semibold">Category Analysis</h3>
+            <PeriodFilter period={period} minPeriod={accountStartPeriod} onChange={setPeriod} compact className="rounded-xl border border-border bg-bg-secondary p-1 shadow-sm" />
+          </div>
           {categoryData.length === 0 ? (
             <p className="text-text-muted text-sm text-center py-8">No expense data yet</p>
           ) : (
@@ -152,16 +181,19 @@ export default function Analytics() {
               {categoryData.map((category) => {
                 const pct = totalExpense > 0 ? Math.round((category.value / totalExpense) * 100) : 0;
                 return (
-                  <div key={category.key}>
-                    <div className="flex items-center gap-3 mb-1.5">
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ background: `${category.color}15` }}>
-                        {CATEGORIES[category.key]?.icon || '#'}
-                      </div>
-                      <span className="text-sm flex-1">{category.name}</span>
-                      <span className="font-display font-semibold text-sm">{formatCurrency(category.value)}</span>
-                      <span className="text-xs text-text-muted w-8 text-right">{pct}%</span>
+                  <div key={category.key} className="space-y-2">
+                    <div className="grid grid-cols-[2rem_minmax(0,1fr)_auto_2.5rem] items-center gap-3">
+                      <IconBadge
+                        icon={CATEGORIES[category.key]?.icon || 'package'}
+                        color={category.color}
+                        className="h-9 w-9 rounded-xl"
+                        iconClassName="h-4 w-4"
+                      />
+                      <span className="min-w-0 truncate text-sm font-medium text-text-primary">{category.name}</span>
+                      <span className="whitespace-nowrap text-right font-display text-sm font-semibold text-text-primary">{formatCurrency(category.value)}</span>
+                      <span className="text-right text-xs font-medium text-text-muted">{pct}%</span>
                     </div>
-                    <div className="pl-10">
+                    <div className="ml-12">
                       <ProgressBar value={pct} color={category.color} />
                     </div>
                   </div>

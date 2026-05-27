@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -7,14 +7,25 @@ import { fetchActiveStrategy } from '../features/strategy/strategySlice';
 import { fetchExpenses } from '../features/expenses/expenseSlice';
 import { fetchGoals } from '../features/goals/goalSlice';
 import { fetchBudget } from '../features/budget/budgetSlice';
-import { StatCard, ProgressBar, Spinner, EmptyState } from '../components/ui/index';
-import { formatCurrency, formatCurrencyWithPaise, formatCompact, getProgress, timeAgo } from '../utils/formatters';
+import { fetchFinancialScore } from '../features/auth/authSlice';
+import { fetchIncome } from '../features/income/incomeSlice';
+import { StatCard, ProgressBar, ComponentLoader, EmptyState, IconBadge } from '../components/ui/index';
+import { formatCurrency, formatCurrencyWithPaise, formatCompact, getAccountStartPeriod, getCurrentPeriod, getPeriodLabel, getProgress, timeAgo } from '../utils/formatters';
 import { CATEGORIES } from '../constants/categories';
+import { PeriodFilter } from '../components/ui/PeriodFilter';
+import { periodKey, queryKey, shouldFetchKey } from '../utils/cacheKeys';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line,
 } from 'recharts';
 
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const UNUSED_LABEL = 'Unused';
+const UNUSED_COLOR = '#8B91A7';
+const isUnusedDivision = (label = '') => String(label).trim().toLowerCase() === UNUSED_LABEL.toLowerCase();
+const formatPercent = (value = 0) => {
+  const rounded = Number(value || 0);
+  return Number.isInteger(rounded) ? rounded : rounded.toFixed(2).replace(/\.?0+$/, '');
+};
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload?.length) {
@@ -32,21 +43,41 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 export default function Dashboard() {
   const dispatch = useDispatch();
-  const { overview, insights, monthly, isLoading } = useSelector((s) => s.analytics);
-  const { active: strategy } = useSelector((s) => s.strategy);
-  const { list: expenses } = useSelector((s) => s.expenses);
-  const { list: goals } = useSelector((s) => s.goals);
-  const { data: budget } = useSelector((s) => s.budget);
+  const { overview, overviewKey, insights, insightsLoaded, monthly, monthlyKey, isLoading } = useSelector((s) => s.analytics);
+  const { active: strategy, activeKey: strategyKey } = useSelector((s) => s.strategy);
+  const { list: expenses, queryKey: expensesKey } = useSelector((s) => s.expenses);
+  const { list: goals, queryKey: goalsKey } = useSelector((s) => s.goals);
+  const { user, financialScoreKey } = useSelector((s) => s.auth);
+  const { data: budget, periodKey: budgetKey } = useSelector((s) => s.budget);
+  const { total: incomeTotal, periodKey: incomeKey } = useSelector((s) => s.income);
+  const [period, setPeriod] = useState(getCurrentPeriod());
+  const [dashboardLoading, setDashboardLoading] = useState(true);
 
   useEffect(() => {
-    dispatch(fetchOverview({}));
-    dispatch(fetchInsights());
-    dispatch(fetchMonthly({ year: new Date().getFullYear() }));
-    dispatch(fetchActiveStrategy({}));
-    dispatch(fetchExpenses({ limit: 8 }));
-    dispatch(fetchGoals({ status: 'active' }));
-    dispatch(fetchBudget({}));
-  }, [dispatch]);
+    let alive = true;
+    const key = periodKey(period);
+    const requests = [];
+    if (shouldFetchKey(overviewKey, key)) requests.push(dispatch(fetchOverview(period)));
+    if (!insightsLoaded) requests.push(dispatch(fetchInsights()));
+    if (shouldFetchKey(monthlyKey, String(period.year))) requests.push(dispatch(fetchMonthly({ year: period.year })));
+    if (shouldFetchKey(strategyKey, key)) requests.push(dispatch(fetchActiveStrategy(period)));
+    if (shouldFetchKey(expensesKey, queryKey({ ...period, limit: 200 }))) requests.push(dispatch(fetchExpenses({ ...period, limit: 200 })));
+    if (shouldFetchKey(incomeKey, key)) requests.push(dispatch(fetchIncome(period)));
+    if (shouldFetchKey(goalsKey, queryKey({}))) requests.push(dispatch(fetchGoals({})));
+    if (shouldFetchKey(budgetKey, key)) requests.push(dispatch(fetchBudget(period)));
+    if (shouldFetchKey(financialScoreKey, key)) requests.push(dispatch(fetchFinancialScore(period)));
+
+    if (requests.length === 0) {
+      setDashboardLoading(false);
+      return () => { alive = false; };
+    }
+
+    setDashboardLoading(true);
+    Promise.allSettled(requests).finally(() => {
+      if (alive) setDashboardLoading(false);
+    });
+    return () => { alive = false; };
+  }, [dispatch, period, overviewKey, insightsLoaded, monthlyKey, strategyKey, expensesKey, incomeKey, goalsKey, budgetKey, financialScoreKey]);
 
   const chartData = monthly?.months?.map((m) => ({
     name: MONTH_NAMES[m.month - 1],
@@ -57,39 +88,155 @@ export default function Dashboard() {
 
   const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } };
   const item = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } };
+  const emergencyBalance = overview?.emergencyFundBalance || 0;
+  const activeGoals = goals.filter((goal) => !goal.isCompleted);
+  const statsLoading = dashboardLoading || !overview;
+  const accountStartPeriod = getAccountStartPeriod(user?.createdAt);
+  const financialScore = user?.financialHealthScore || 0;
+  const financialHealthLabel = financialScore >= 80 ? 'Excellent' : financialScore >= 60 ? 'Good' : financialScore >= 40 ? 'Fair' : 'Needs work';
+  const strategyDivisions = strategy?.divisions || [];
+  const effectiveStrategyIncome = Number(incomeTotal || strategy?.totalIncome || 0);
+  const spendableStrategyTotal = strategyDivisions
+    .filter((division) => !isUnusedDivision(division.label))
+    .reduce((sum, division) => sum + (Number(division.allocatedAmount) || 0), 0);
+  const calculatedUnusedAmount = Math.max(effectiveStrategyIncome - spendableStrategyTotal, 0);
+  const calculatedUnusedPercentage = effectiveStrategyIncome > 0 ? (calculatedUnusedAmount / effectiveStrategyIncome) * 100 : 0;
+  const hasUnusedDivision = strategyDivisions.some((division) => isUnusedDivision(division.label));
+  const displayStrategyDivisions = strategy
+    ? [
+        ...strategyDivisions.map((division) => (
+          isUnusedDivision(division.label)
+            ? {
+                ...division,
+                label: UNUSED_LABEL,
+                color: division.color || UNUSED_COLOR,
+                allocatedAmount: calculatedUnusedAmount,
+                percentage: calculatedUnusedPercentage,
+                spentAmount: 0,
+              }
+            : division
+        )),
+        ...(!hasUnusedDivision && (strategy.allocationMode === 'amount' || strategy.type === 'custom')
+          ? [{
+              label: UNUSED_LABEL,
+              color: UNUSED_COLOR,
+              allocatedAmount: calculatedUnusedAmount,
+              percentage: calculatedUnusedPercentage,
+              spentAmount: 0,
+            }]
+          : []),
+      ]
+    : [];
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-5 max-w-7xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-display font-bold text-xl">Dashboard</h2>
+          <p className="text-sm text-text-secondary mt-0.5">Showing {getPeriodLabel(period)}</p>
+        </div>
+        <PeriodFilter
+          period={period}
+          minPeriod={accountStartPeriod}
+          onApply={setPeriod}
+          compact
+          className="rounded-xl border border-border bg-bg-secondary p-1 shadow-sm"
+        />
+      </div>
+
       {/* Stat cards */}
-      <motion.div variants={item} className="grid grid-cols-2 gap-3 sm:gap-4">
+      <motion.div variants={item} className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
-          label="Total Income"
+          label="This Month Income"
           value={formatCurrencyWithPaise(overview?.totalIncome || 0)}
-          icon="💰"
+          icon="money"
           color="#00E5A0"
-          delta={`${overview?.savingsRate || 0}% savings rate`}
+          delta="Every rupee is progress"
+          loading={statsLoading}
         />
         <StatCard
-          label="Total Spent"
+          label="Income Till Now"
+          value={formatCurrencyWithPaise(overview?.incomeTillNow || 0)}
+          icon="income"
+          color="#00E5A0"
+          delta="Your effort is adding up"
+          loading={statsLoading}
+        />
+        <StatCard
+          label="This Month Expense"
           value={formatCurrencyWithPaise(overview?.totalExpense || 0)}
-          icon="📤"
+          icon="spent"
           color="#FF4B6B"
-          delta={overview?.expenseDelta !== undefined ? `${overview.expenseDelta > 0 ? '↑' : '↓'} ${Math.abs(overview.expenseDelta)}% vs last month` : ''}
+          delta={overview?.totalExpense > 0 ? 'Stay aware, stay in control' : 'Clean slate, keep it steady'}
+          loading={statsLoading}
         />
         <StatCard
-          label="Net Savings"
+          label="Expense Till Now"
+          value={formatCurrencyWithPaise(overview?.expenseTillNow || 0)}
+          icon="spent"
+          color="#FF4B6B"
+          delta="Mindful choices win"
+          loading={statsLoading}
+        />
+        <StatCard
+          label="Month Left"
           value={formatCurrencyWithPaise(overview?.netSavings || 0)}
-          icon="🏦"
+          icon="savings"
           color="#F7931A"
-          delta="This month"
+          delta={overview?.netSavings > 0 ? 'Future you will smile' : 'You can rebuild this'}
+          loading={statsLoading}
         />
         <StatCard
           label="Active Goals"
           value={overview?.goalCount || 0}
-          icon="🎯"
+          icon="target"
           color="#7B6EF6"
-          delta={`Using ${overview?.strategyName || '--'}`}
+          delta={overview?.goalCount > 0 ? 'Dreams with a plan' : `Build with ${overview?.strategyName || 'a plan'}`}
+          loading={statsLoading}
         />
+      </motion.div>
+
+      <motion.div variants={item} className="card">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <IconBadge icon="shield" color="#3E8EFF" className="h-12 w-12 flex-shrink-0" iconClassName="h-6 w-6" />
+            <div>
+              <h3 className="font-display font-semibold">Emergency Funds</h3>
+              <p className="text-xs text-text-muted">
+                Unspent monthly allocation moves here after your approval.
+              </p>
+            </div>
+          </div>
+          <div className="text-left sm:text-right">
+            {dashboardLoading ? (
+              <div className="ml-auto space-y-2">
+                <div className="h-6 w-28 animate-pulse rounded-lg bg-bg-card" />
+                <div className="h-3 w-20 animate-pulse rounded bg-bg-card" />
+              </div>
+            ) : (
+              <>
+                <p className="font-display text-xl font-bold text-accent-blue">{formatCurrencyWithPaise(emergencyBalance)}</p>
+                <p className="text-xs text-text-muted">
+                  {overview?.lastEmergencyRollover ? `Last rollover: ${overview.lastEmergencyRollover}` : 'No rollover yet'}
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      <motion.div variants={item} className="card">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h3 className="font-display font-semibold">Financial Health</h3>
+            <p className="text-xs text-text-muted">Single score based on savings, goals, and spending.</p>
+          </div>
+          <div className="text-right">
+            <p className="font-display text-xl font-bold text-accent-green">{financialScore}%</p>
+            <p className="text-xs text-text-muted">{financialHealthLabel}</p>
+          </div>
+        </div>
+        <ProgressBar value={financialScore} color="#00E5A0" />
       </motion.div>
 
       {/* Chart + Strategy */}
@@ -99,7 +246,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="font-display font-semibold">Income vs Expenses</h3>
-              <p className="text-xs text-text-muted mt-0.5">{new Date().getFullYear()} overview</p>
+              <p className="text-xs text-text-muted mt-0.5">{period.year} overview</p>
             </div>
             <div className="flex gap-3 text-xs text-text-secondary">
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent-green inline-block" />Income</span>
@@ -107,8 +254,8 @@ export default function Dashboard() {
               <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-accent-orange inline-block" />Savings</span>
             </div>
           </div>
-          {isLoading ? (
-            <div className="h-44 flex items-center justify-center"><Spinner /></div>
+          {dashboardLoading ? (
+            <ComponentLoader label="Loading chart..." />
           ) : (
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={chartData} barSize={8} barCategoryGap="30%">
@@ -133,32 +280,35 @@ export default function Dashboard() {
             <Link to="/strategy" className="text-xs text-accent-green hover:underline">Edit</Link>
           </div>
 
-          {strategy ? (
+          {dashboardLoading ? (
+            <ComponentLoader label="Loading strategy..." />
+          ) : strategy ? (
             <div className="space-y-3">
-              {strategy.divisions.map((d) => {
+              {displayStrategyDivisions.map((d) => {
+                const isUnused = isUnusedDivision(d.label);
                 const pct = d.allocatedAmount > 0 ? Math.min(Math.round((d.spentAmount / d.allocatedAmount) * 100), 100) : 0;
                 return (
                   <div key={d.label}>
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
                         <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                        <span className="text-xs text-text-secondary">{d.label} ({d.percentage}%)</span>
+                        <span className="text-xs text-text-secondary">{d.label} ({formatPercent(d.percentage)}%)</span>
                       </div>
                       <span className="text-xs font-semibold font-display" style={{ color: d.color }}>
                         {formatCompact(d.allocatedAmount)}
                       </span>
                     </div>
-                    <ProgressBar value={pct} color={d.color} />
+                    <ProgressBar value={isUnused ? 100 : pct} color={d.color} />
                     <div className="flex justify-between mt-1">
-                      <span className="text-[10px] text-text-muted">Spent: {formatCompact(d.spentAmount)}</span>
-                      <span className="text-[10px] text-text-muted">Left: {formatCompact(d.allocatedAmount - d.spentAmount)}</span>
+                      <span className="text-[10px] text-text-muted">{isUnused ? 'Protected' : `Spent: ${formatCompact(d.spentAmount)}`}</span>
+                      <span className="text-[10px] text-text-muted">{isUnused ? 'Allocate before use' : `Left: ${formatCompact(Math.max(d.allocatedAmount - d.spentAmount, 0))}`}</span>
                     </div>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <EmptyState icon="⬡" title="No strategy" description="Set up a budget strategy" action={<Link to="/strategy" className="btn-primary">Set Strategy</Link>} />
+            <EmptyState icon="target" title="No strategy" description="Set up a budget strategy" action={<Link to="/strategy" className="btn-primary">Set Strategy</Link>} />
           )}
         </motion.div>
       </div>
@@ -171,20 +321,23 @@ export default function Dashboard() {
             <h3 className="font-display font-semibold">Recent Transactions</h3>
             <Link to="/expenses" className="text-xs text-accent-green hover:underline">View all</Link>
           </div>
-          {expenses.length === 0 ? (
-            <EmptyState icon="📭" title="No expenses" description="Add your first expense" />
+          {dashboardLoading ? (
+            <ComponentLoader label="Loading transactions..." />
+          ) : expenses.length === 0 ? (
+            <EmptyState icon="package" title="No expenses" description="Add your first expense" />
           ) : (
             <div className="space-y-0 divide-y divide-white/[0.05]">
               {expenses.slice(0, 6).map((exp) => {
                 const cat = CATEGORIES[exp.category];
                 return (
                   <div key={exp._id} className="flex items-center gap-3 py-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base flex-shrink-0" style={{ background: cat?.bg }}>
-                      {cat?.icon}
-                    </div>
+                    <IconBadge icon={cat?.icon} color={cat?.color} className="h-9 w-9 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{exp.description}</p>
-                      <p className="text-[11px] text-text-muted">{cat?.label} · {timeAgo(exp.date)}</p>
+                      <p className="text-[11px] text-text-muted">
+                        {cat?.label} / {timeAgo(exp.date)}
+                        {exp.offlinePending && <span className="ml-1 text-accent-orange">/ Pending sync</span>}
+                      </p>
                     </div>
                     <span className="text-sm font-display font-semibold text-accent-red flex-shrink-0">
                       -{formatCurrency(exp.amount)}
@@ -202,18 +355,23 @@ export default function Dashboard() {
             <h3 className="font-display font-semibold">Active Goals</h3>
             <Link to="/goals" className="text-xs text-accent-green hover:underline">View all</Link>
           </div>
-          {goals.length === 0 ? (
-            <EmptyState icon="🎯" title="No goals" description="Create your first savings goal" action={<Link to="/goals" className="btn-primary">Add Goal</Link>} />
+          {dashboardLoading ? (
+            <ComponentLoader label="Loading goals..." />
+          ) : activeGoals.length === 0 ? (
+            <EmptyState icon="target" title="No goals" description="Create your first savings goal" action={<Link to="/goals" className="btn-primary">Add Goal</Link>} />
           ) : (
             <div className="space-y-4">
-              {goals.slice(0, 3).map((goal) => {
+              {activeGoals.slice(0, 3).map((goal) => {
                 const pct = getProgress(goal.currentAmount, goal.targetAmount);
                 return (
                   <div key={goal._id}>
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xl">{goal.icon}</span>
+                      <IconBadge icon={goal.icon || 'target'} color={goal.color || '#7B6EF6'} className="h-9 w-9 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{goal.title}</p>
+                        <p className="text-sm font-medium truncate">
+                          {goal.title}
+                          {goal.offlinePending && <span className="ml-1 text-[10px] font-bold uppercase text-accent-orange">Pending</span>}
+                        </p>
                         <p className="text-[11px] text-text-muted">{formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}</p>
                       </div>
                       <span className="badge-green text-xs">{pct}%</span>
@@ -228,15 +386,20 @@ export default function Dashboard() {
 
         {/* AI Insights */}
         <motion.div variants={item} className="card lg:col-span-1 bg-gradient-to-br from-accent-purple/10 to-accent-green/5 border-accent-purple/20">
-          <h3 className="font-display font-semibold mb-1">🤖 AI Insights</h3>
+          <div className="mb-1 flex items-center gap-2">
+            <IconBadge icon="bot" color="#7B6EF6" className="h-8 w-8" />
+            <h3 className="font-display font-semibold">AI Insights</h3>
+          </div>
           <p className="text-xs text-text-muted mb-4">Personalized for this month</p>
-          {insights.length === 0 ? (
-            <EmptyState icon="💡" title="No insights yet" description="Add more transactions to get insights" />
+          {dashboardLoading ? (
+            <ComponentLoader label="Loading insights..." />
+          ) : insights.length === 0 ? (
+            <EmptyState icon="insights" title="No insights yet" description="Add more transactions to get insights" />
           ) : (
             <div className="space-y-0 divide-y divide-white/[0.05]">
               {insights.slice(0, 4).map((ins, i) => (
                 <div key={i} className="flex gap-3 py-3">
-                  <span className="text-xl flex-shrink-0">{ins.icon}</span>
+                  <IconBadge icon="insights" color="#7B6EF6" className="h-8 w-8 flex-shrink-0" />
                   <p className="text-xs text-text-secondary leading-relaxed" dangerouslySetInnerHTML={{
                     __html: ins.message.replace(/(\d[\d,]+)/g, '<strong class="text-text-primary">$1</strong>')
                   }} />

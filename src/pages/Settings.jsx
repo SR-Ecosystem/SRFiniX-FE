@@ -2,17 +2,27 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { expenseAPI } from '../api/expense.api';
 import { userAPI } from '../api/user.api';
-import { fetchProfile, logoutUser } from '../features/auth/authSlice';
-import { fetchActiveStrategy, transferToEmergency } from '../features/strategy/strategySlice';
-import { Button, Input, Select } from '../components/ui/index';
+import { fetchFinancialScore, fetchProfile, logoutUser } from '../features/auth/authSlice';
+import { fetchActiveStrategy, transferCurrentRemaining, transferToEmergency } from '../features/strategy/strategySlice';
+import { fetchOverview } from '../features/analytics/analyticsSlice';
+import { redoLastAction, undoLastAction } from '../features/history/historySlice';
+import { endOperation, startOperation } from '../features/ui/uiSlice';
+import { Button, ConfirmDialog, IconBadge, Input, ProgressBar, Select, ThemeToggle } from '../components/ui/index';
 import toast from 'react-hot-toast';
+import { parseMoneyInput, formatCurrency, getCurrentPeriod } from '../utils/formatters';
+import { ensureMobileNotificationPermission } from '../utils/mobileNotifications';
+import { periodKey, shouldFetchKey } from '../utils/cacheKeys';
+
+const isUnusedDivision = (label = '') => String(label).trim().toLowerCase() === 'unused';
 
 export default function Settings() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user } = useSelector((s) => s.auth);
-  const { active: strategy } = useSelector((s) => s.strategy);
+  const { active: strategy, activeKey: strategyKey, emergencyFundBalance } = useSelector((s) => s.strategy);
+  const { undoStack, redoStack, isApplying } = useSelector((s) => s.history);
   const [profile, setProfile] = useState({
     name: user?.name || '',
     profile: { ...user?.profile } || {},
@@ -20,10 +30,47 @@ export default function Settings() {
   const [prefs, setPrefs] = useState({ ...user?.preferences });
   const [saving, setSaving] = useState(false);
   const [emergencyForm, setEmergencyForm] = useState({ divisionLabel: '', amount: '' });
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState('');
+  const [dailyUsage, setDailyUsage] = useState({ spent: 0, loading: false });
+  const [confirmAction, setConfirmAction] = useState(null);
 
   useEffect(() => {
-    dispatch(fetchActiveStrategy({}));
-  }, [dispatch]);
+    const currentPeriod = getCurrentPeriod();
+    if (shouldFetchKey(strategyKey, periodKey(currentPeriod))) dispatch(fetchActiveStrategy(currentPeriod));
+  }, [dispatch, strategyKey]);
+
+  useEffect(() => {
+    setProfile({
+      name: user?.name || '',
+      profile: { ...user?.profile } || {},
+    });
+    setPrefs({ ...user?.preferences });
+  }, [user]);
+
+  useEffect(() => {
+    const loadTodaySpending = async () => {
+      setDailyUsage((current) => ({ ...current, loading: true }));
+      try {
+        const now = new Date();
+        const { data } = await expenseAPI.getAll({
+          month: now.getMonth() + 1,
+          year: now.getFullYear(),
+          limit: 200,
+        });
+        const todayKey = now.toDateString();
+        const spent = (data.expenses || []).reduce((sum, expense) => {
+          const expenseDate = new Date(expense.date);
+          if (Number.isNaN(expenseDate.getTime()) || expenseDate.toDateString() !== todayKey) return sum;
+          return sum + (Number(expense.amount) || 0);
+        }, 0);
+        setDailyUsage({ spent, loading: false });
+      } catch {
+        setDailyUsage({ spent: 0, loading: false });
+      }
+    };
+    loadTodaySpending();
+  }, []);
 
   const setP = (key, value) => setProfile((current) => ({ ...current, [key]: value }));
   const setProf = (key, value) => setProfile((current) => ({ ...current, profile: { ...current.profile, [key]: value } }));
@@ -31,45 +78,93 @@ export default function Settings() {
 
   const saveProfile = async () => {
     setSaving(true);
+    dispatch(startOperation('Saving profile...'));
     try {
-      await userAPI.updateProfile(profile);
+      let payload = profile;
+      if (avatarFile) {
+        payload = new FormData();
+        payload.append('name', profile.name || '');
+        payload.append('profile', JSON.stringify(profile.profile || {}));
+        payload.append('avatar', avatarFile);
+      }
+
+      await userAPI.updateProfile(payload);
       await dispatch(fetchProfile());
+      setAvatarFile(null);
       toast.success('Profile updated.');
     } catch {
       toast.error('Failed to update profile');
+    } finally {
+      dispatch(endOperation());
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const savePrefs = async () => {
     setSaving(true);
+    dispatch(startOperation('Saving preferences...'));
     try {
-      await userAPI.updatePreferences(prefs);
+      if (prefs.notifications) {
+        const permission = await ensureMobileNotificationPermission();
+        if (permission.native && !permission.granted) {
+          toast.error('Notification permission is required for mobile alerts.');
+          return;
+        }
+      }
+      await userAPI.updatePreferences({
+        ...prefs,
+        dailyExpenseLimit: parseMoneyInput(prefs.dailyExpenseLimit || 0),
+      });
       await dispatch(fetchProfile());
       toast.success('Preferences saved.');
     } catch {
       toast.error('Failed to save preferences');
+    } finally {
+      dispatch(endOperation());
+      setSaving(false);
     }
-    setSaving(false);
+  };
+
+  const resetDailyLimit = async () => {
+    setSaving(true);
+    dispatch(startOperation('Resetting daily limit...'));
+    try {
+      const nextPrefs = { ...prefs, dailyExpenseLimit: 0 };
+      await userAPI.updatePreferences(nextPrefs);
+      setPrefs(nextPrefs);
+      await dispatch(fetchProfile());
+      toast.success('Daily limit reset.');
+    } catch {
+      toast.error('Failed to reset daily limit');
+    } finally {
+      dispatch(endOperation());
+      setSaving(false);
+    }
   };
 
   const addEmergencyFund = async (event) => {
-    event.preventDefault();
+    event?.preventDefault?.();
     if (!emergencyForm.divisionLabel || !emergencyForm.amount) {
       toast.error('Choose strategy part and amount.');
       return;
     }
 
-    const res = await dispatch(transferToEmergency({
-      divisionLabel: emergencyForm.divisionLabel,
-      amount: Number(emergencyForm.amount),
-    }));
+    dispatch(startOperation('Moving money to emergency fund...'));
+    try {
+      const res = await dispatch(transferToEmergency({
+        divisionLabel: emergencyForm.divisionLabel,
+        amount: parseMoneyInput(emergencyForm.amount),
+      }));
 
-    if (transferToEmergency.fulfilled.match(res)) {
-      toast.success('Added to emergency fund.');
-      setEmergencyForm({ divisionLabel: '', amount: '' });
-    } else {
-      toast.error(res.payload || 'Failed to add emergency fund');
+      if (transferToEmergency.fulfilled.match(res)) {
+        toast.success('Added to emergency fund.');
+        setEmergencyForm({ divisionLabel: '', amount: '' });
+        await refreshEmergencyViews();
+      } else {
+        toast.error(res.payload || 'Failed to add emergency fund');
+      }
+    } finally {
+      dispatch(endOperation());
     }
   };
 
@@ -78,10 +173,89 @@ export default function Settings() {
     navigate('/login', { replace: true });
   };
 
+  const handleUndo = async () => {
+    dispatch(startOperation('Applying undo...'));
+    const res = await dispatch(undoLastAction());
+    if (undoLastAction.fulfilled.match(res) && res.payload) toast.success('Undo applied.');
+    else toast.error(res.payload || 'Nothing to undo.');
+    dispatch(endOperation());
+  };
+
+  const handleRedo = async () => {
+    dispatch(startOperation('Applying redo...'));
+    const res = await dispatch(redoLastAction());
+    if (redoLastAction.fulfilled.match(res) && res.payload) toast.success('Redo applied.');
+    else toast.error(res.payload || 'Nothing to redo.');
+    dispatch(endOperation());
+  };
+
   const initials = user?.name?.split(' ').map((name) => name[0]).join('').toUpperCase().slice(0, 2) || 'U';
+  const avatarSrc = avatarPreview || user?.avatarUrl || user?.avatar;
+  const dailyLimit = parseMoneyInput(prefs.dailyExpenseLimit || 0);
+  const dailyPercent = dailyLimit > 0 ? Math.min(100, Math.round((dailyUsage.spent / dailyLimit) * 100)) : 0;
+  const dailyLeft = Math.max(dailyLimit - dailyUsage.spent, 0);
+  const spendableStrategyDivisions = (strategy?.divisions || []).filter((division) => !isUnusedDivision(division.label));
+  const currentMonthRemaining = spendableStrategyDivisions.reduce(
+    (sum, division) => sum + Math.max((division.allocatedAmount || 0) - (division.spentAmount || 0), 0),
+    0,
+  );
+
+  const refreshEmergencyViews = async () => {
+    await Promise.all([
+      dispatch(fetchActiveStrategy({})),
+      dispatch(fetchOverview({})),
+      dispatch(fetchFinancialScore()),
+      dispatch(fetchProfile()),
+    ]);
+  };
+
+  const handleAvatarChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/') || file.size > 2 * 1024 * 1024) {
+      toast.error('Choose an image up to 2 MB.');
+      return;
+    }
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const transferAllRemaining = async () => {
+    if (currentMonthRemaining <= 0) {
+      toast.error('No remaining strategy amount to transfer.');
+      return;
+    }
+
+    dispatch(startOperation('Transferring remaining money...'));
+    try {
+      const res = await dispatch(transferCurrentRemaining(getCurrentPeriod()));
+      if (transferCurrentRemaining.fulfilled.match(res)) {
+        toast.success('Remaining amount moved to emergency fund.');
+        await refreshEmergencyViews();
+      } else {
+        toast.error(res.payload || 'Failed to transfer remaining amount.');
+      }
+    } finally {
+      dispatch(endOperation());
+    }
+  };
 
   return (
     <div className="max-w-5xl space-y-5">
+      <ConfirmDialog
+        isOpen={!!confirmAction}
+        title={confirmAction?.title}
+        description={confirmAction?.description}
+        confirmLabel={confirmAction?.confirmLabel || 'Confirm'}
+        tone={confirmAction?.tone}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={async () => {
+          const action = confirmAction?.onConfirm;
+          setConfirmAction(null);
+          await action?.();
+        }}
+      />
       <div>
         <h2 className="font-display font-bold text-xl">Settings</h2>
         <p className="text-sm text-text-secondary mt-0.5">Manage your account and preferences</p>
@@ -91,9 +265,13 @@ export default function Settings() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="card">
           <h3 className="font-display font-semibold mb-4">Profile</h3>
           <div className="flex items-center gap-4 mb-5 p-4 bg-bg-tertiary rounded-xl">
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-accent-purple to-accent-green flex items-center justify-center font-bold text-xl text-white">
-              {initials}
-            </div>
+            {avatarSrc ? (
+              <img src={avatarSrc} alt={user?.name || 'Profile'} className="h-14 w-14 rounded-full object-cover" />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-gradient-to-br from-accent-purple to-accent-green flex items-center justify-center font-bold text-xl text-white">
+                {initials}
+              </div>
+            )}
             <div className="min-w-0">
               <p className="font-semibold truncate">{user?.name}</p>
               <p className="text-sm text-text-secondary truncate">{user?.email}</p>
@@ -101,6 +279,15 @@ export default function Settings() {
             </div>
           </div>
           <div className="space-y-4">
+            <div>
+              <label className="label">Profile Photo</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+                className="input file:mr-3 file:rounded-lg file:border-0 file:bg-accent-green file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-black"
+              />
+            </div>
             <Input label="Full Name" value={profile.name} onChange={(event) => setP('name', event.target.value)} />
             <div className="grid grid-cols-2 gap-4">
               <Input label="Age" type="number" value={profile.profile.age || ''} onChange={(event) => setProf('age', event.target.value)} />
@@ -115,14 +302,37 @@ export default function Settings() {
               <option value="medium">Medium - Balanced</option>
               <option value="high">High - Aggressive</option>
             </Select>
-            <Button onClick={saveProfile} loading={saving}>Save Profile</Button>
+            <Button onClick={() => setConfirmAction({
+              title: 'Save profile changes?',
+              description: 'Your profile details and photo changes will be updated.',
+              confirmLabel: 'Save',
+              onConfirm: saveProfile,
+            })} loading={saving}>Save Profile</Button>
           </div>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="card">
-          <h3 className="font-display font-semibold mb-1">Emergency Fund</h3>
-          <p className="text-xs text-text-muted mb-4">Add money from an available strategy part.</p>
-          <form onSubmit={addEmergencyFund} className="space-y-4">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <IconBadge icon="shield" color="#3E8EFF" className="h-10 w-10" />
+              <div>
+                <h3 className="font-display font-semibold">Emergency Fund</h3>
+                <p className="text-xs text-text-muted">Add money from an available strategy part.</p>
+              </div>
+            </div>
+            <p className="font-display font-bold text-accent-blue">
+              {formatCurrency(emergencyFundBalance || user?.profile?.emergencyFundBalance || 0)}
+            </p>
+          </div>
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            setConfirmAction({
+              title: 'Move to emergency fund?',
+              description: `${formatCurrency(parseMoneyInput(emergencyForm.amount || 0))} will be moved from ${emergencyForm.divisionLabel || 'the selected strategy part'} to Emergency Funds.`,
+              confirmLabel: 'Move',
+              onConfirm: addEmergencyFund,
+            });
+          }} className="space-y-4">
             <Select
               label="From Strategy Part"
               value={emergencyForm.divisionLabel}
@@ -130,8 +340,10 @@ export default function Settings() {
               required
             >
               <option value="">Choose strategy part</option>
-              {(strategy?.divisions || []).map((division) => (
-                <option key={division.label} value={division.label}>{division.label}</option>
+              {spendableStrategyDivisions.map((division) => (
+                <option key={division.label} value={division.label}>
+                  {division.label} - left {formatCurrency(Math.max((division.allocatedAmount || 0) - (division.spentAmount || 0), 0))}
+                </option>
               ))}
             </Select>
             <Input
@@ -143,7 +355,25 @@ export default function Settings() {
               min="1"
               required
             />
-            <Button type="submit">Add Emergency Fund</Button>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button type="submit">Add Emergency Fund</Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={currentMonthRemaining <= 0}
+                onClick={() => setConfirmAction({
+                  title: 'Transfer all remaining money?',
+                  description: `${formatCurrency(currentMonthRemaining)} from this month's remaining strategy allocation will be moved into Emergency Funds.`,
+                  confirmLabel: 'Transfer All',
+                  onConfirm: transferAllRemaining,
+                })}
+              >
+                Transfer All Remaining
+              </Button>
+            </div>
+            <p className="text-xs text-text-muted">
+              Remaining this month: <span className="font-semibold text-text-primary">{formatCurrency(currentMonthRemaining)}</span>
+            </p>
           </form>
         </motion.div>
 
@@ -156,11 +386,63 @@ export default function Settings() {
               <option value="EUR">Euro (EUR)</option>
               <option value="GBP">British Pound (GBP)</option>
             </Select>
-            <Select label="Theme" value={prefs.theme || 'dark'} onChange={(event) => setPref('theme', event.target.value)}>
-              <option value="dark">Dark</option>
-              <option value="light">Light</option>
-              <option value="system">System</option>
-            </Select>
+            <div className="rounded-xl bg-bg-tertiary p-3">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                <IconBadge icon="spent" color="#FF4B6B" className="h-9 w-9" />
+                <div>
+                  <p className="text-sm font-medium">Daily Expense Limit</p>
+                  <p className="text-xs text-text-muted">Notify me when today&apos;s spending crosses this amount.</p>
+                </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-text-muted">Active limit</p>
+                  <p className="text-sm font-bold text-text-primary">{dailyLimit > 0 ? formatCurrency(dailyLimit) : 'Off'}</p>
+                </div>
+              </div>
+              {dailyLimit > 0 && (
+                <div className="mb-3 rounded-lg bg-bg-secondary p-3">
+                  <div className="mb-2 flex items-center justify-between gap-3 text-xs">
+                    <span className="text-text-muted">Today spent</span>
+                    <span className="font-semibold text-text-primary">
+                      {dailyUsage.loading ? 'Loading...' : `${formatCurrency(dailyUsage.spent)} / ${formatCurrency(dailyLimit)}`}
+                    </span>
+                  </div>
+                  <ProgressBar value={dailyPercent} color={dailyPercent >= 100 ? '#FF4B6B' : dailyPercent >= 75 ? '#F7931A' : '#00E5A0'} />
+                  <div className="mt-2 flex items-center justify-between text-[11px] text-text-muted">
+                    <span>{dailyPercent}% used</span>
+                    <span>{dailyUsage.spent > dailyLimit ? `${formatCurrency(dailyUsage.spent - dailyLimit)} over` : `${formatCurrency(dailyLeft)} left`}</span>
+                  </div>
+                </div>
+              )}
+              <Input
+                label="Limit Amount (Rs)"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Example: 1000"
+                value={prefs.dailyExpenseLimit || ''}
+                onChange={(event) => setPref('dailyExpenseLimit', event.target.value)}
+              />
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-text-muted">Alerts fire at 50%, 75%, 100%, and over limit.</p>
+                <Button type="button" variant="secondary" size="sm" onClick={() => setConfirmAction({
+                  title: 'Reset daily limit?',
+                  description: 'Daily expense limit alerts will be turned off.',
+                  confirmLabel: 'Reset',
+                  onConfirm: resetDailyLimit,
+                })} loading={saving}>
+                  Reset Limit
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-xl bg-bg-tertiary p-3">
+              <div>
+                <p className="text-sm font-medium">Appearance</p>
+                <p className="text-xs text-text-muted">Switch between light and dark mode</p>
+              </div>
+              <ThemeToggle />
+            </div>
             <label className="flex items-center justify-between cursor-pointer py-2">
               <div>
                 <p className="text-sm font-medium">Push Notifications</p>
@@ -173,7 +455,12 @@ export default function Settings() {
                 <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${prefs.notifications ? 'translate-x-6' : 'translate-x-1'}`} />
               </div>
             </label>
-            <Button onClick={savePrefs} loading={saving}>Save Preferences</Button>
+            <Button onClick={() => setConfirmAction({
+              title: 'Save preferences?',
+              description: 'Notification, currency, appearance, and daily limit settings will be updated.',
+              confirmLabel: 'Save',
+              onConfirm: savePrefs,
+            })} loading={saving}>Save Preferences</Button>
           </div>
         </motion.div>
 
@@ -208,11 +495,30 @@ export default function Settings() {
           <h3 className="font-display font-semibold mb-1 text-accent-red">Account Actions</h3>
           <p className="text-xs text-text-muted mb-4">Sign out only when you want this device to forget the session.</p>
           <div className="flex flex-wrap gap-3">
-            <Button variant="secondary" size="sm" onClick={handleLogout}>
-              Logout
+            <Button variant="secondary" size="sm" onClick={() => setConfirmAction({
+              title: 'Undo last change?',
+              description: 'The most recent tracked change will be reversed.',
+              confirmLabel: 'Undo',
+              onConfirm: handleUndo,
+            })} disabled={isApplying || undoStack.length === 0}>
+              Undo
             </Button>
-            <Button variant="danger" size="sm" onClick={() => toast.error('Contact support to delete your account')}>
-            Delete Account
+            <Button variant="secondary" size="sm" onClick={() => setConfirmAction({
+              title: 'Redo last change?',
+              description: 'The most recently undone change will be applied again.',
+              confirmLabel: 'Redo',
+              onConfirm: handleRedo,
+            })} disabled={isApplying || redoStack.length === 0}>
+              Redo
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setConfirmAction({
+              title: 'Logout?',
+              description: 'This device will return to the login screen.',
+              confirmLabel: 'Logout',
+              tone: 'danger',
+              onConfirm: handleLogout,
+            })}>
+              Logout
             </Button>
           </div>
         </motion.div>

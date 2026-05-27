@@ -6,11 +6,12 @@ export default {
     extend: {
       colors: {
         bg: {
-          primary: '#0A0C10',
-          secondary: '#111318',
-          tertiary: '#181B22',
-          card: '#1E2229',
+          primary: 'var(--color-bg-primary)',
+          secondary: 'var(--color-bg-secondary)',
+          tertiary: 'var(--color-bg-tertiary)',
+          card: 'var(--color-bg-card)',
         },
+        border: 'var(--color-border)',
         accent: {
           green: '#00E5A0',
           purple: '#7B6EF6',
@@ -19,9 +20,9 @@ export default {
           blue: '#3E8EFF',
         },
         text: {
-          primary: '#F0F2F8',
-          secondary: '#8B91A7',
-          muted: '#555C72',
+          primary: 'var(--color-text-primary)',
+          secondary: 'var(--color-text-secondary)',
+          muted: 'var(--color-text-muted)',
         },
       },
       fontFamily: {

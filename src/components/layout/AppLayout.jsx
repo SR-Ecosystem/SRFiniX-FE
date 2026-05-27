@@ -3,6 +3,8 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { BottomNav } from './BottomNav';
+import { OfflineStatusBar } from './OfflineStatusBar';
+import { OperationOverlay } from '../ui/index';
 
 export const AppLayout = () => {
   const { sidebarOpen } = useSelector((s) => s.ui);
@@ -12,11 +14,13 @@ export const AppLayout = () => {
       <Sidebar isOpen={sidebarOpen} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Topbar />
-        <main className="flex-1 overflow-y-auto p-4 pb-28 md:p-6">
+        <main className="flex-1 overflow-y-auto p-4 pb-24 md:p-6">
           <Outlet />
         </main>
       </div>
       <BottomNav />
+      <OfflineStatusBar />
+      <OperationOverlay />
     </div>
   );
 };

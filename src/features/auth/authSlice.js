@@ -17,6 +17,10 @@ export const fetchProfile = createAsyncThunk('auth/fetchProfile', async (_, { re
   try { const res = await userAPI.getProfile(); return res.data; }
   catch (e) { return rejectWithValue(e.response?.data?.message); }
 });
+export const fetchFinancialScore = createAsyncThunk('auth/fetchFinancialScore', async (params, { rejectWithValue }) => {
+  try { const res = await userAPI.getFinancialScore(params); return res.data; }
+  catch (e) { return rejectWithValue(e.response?.data?.message); }
+});
 export const completeOnboarding = createAsyncThunk('auth/onboarding', async (data, { rejectWithValue }) => {
   try { const res = await userAPI.completeOnboarding(data); return res.data; }
   catch (e) { return rejectWithValue(e.response?.data?.message); }
@@ -27,6 +31,7 @@ const authSlice = createSlice({
   initialState: {
     user: null,
     accessToken: localStorage.getItem('accessToken') || null,
+    financialScoreKey: null,
     isLoading: false, error: null, isInitialized: false,
   },
   reducers: {
@@ -64,6 +69,10 @@ const authSlice = createSlice({
     });
 
     b.addCase(completeOnboarding.fulfilled, (s, a) => { s.user = a.payload.user; });
+    b.addCase(fetchFinancialScore.fulfilled, (s, a) => {
+      if (s.user) s.user.financialHealthScore = a.payload.score;
+      s.financialScoreKey = `${a.meta.arg?.year || ''}-${a.meta.arg?.month || ''}`;
+    });
   },
 });
 

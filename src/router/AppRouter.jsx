@@ -24,6 +24,12 @@ const PageLoader = () => (
   </div>
 );
 
+const Loadable = ({ children }) => (
+  <Suspense fallback={<PageLoader />}>
+    {children}
+  </Suspense>
+);
+
 const PrivateRoute = ({ children }) => {
   const { accessToken, isInitialized } = useSelector((s) => s.auth);
   if (!isInitialized) return <PageLoader />;
@@ -43,31 +49,29 @@ const PublicRoute = ({ children }) => {
 };
 
 export const AppRouter = () => (
-  <Suspense fallback={<PageLoader />}>
-    <Routes>
-      {/* Public */}
-      <Route path="/login"           element={<PublicRoute><Login /></PublicRoute>} />
-      <Route path="/register"        element={<PublicRoute><Register /></PublicRoute>} />
-      <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+  <Routes>
+    {/* Public */}
+    <Route path="/login"           element={<PublicRoute><Loadable><Login /></Loadable></PublicRoute>} />
+    <Route path="/register"        element={<PublicRoute><Loadable><Register /></Loadable></PublicRoute>} />
+    <Route path="/forgot-password" element={<PublicRoute><Loadable><ForgotPassword /></Loadable></PublicRoute>} />
 
-      {/* Onboarding */}
-      <Route path="/onboarding" element={<PrivateRoute><Onboarding /></PrivateRoute>} />
+    {/* Onboarding */}
+    <Route path="/onboarding" element={<PrivateRoute><Loadable><Onboarding /></Loadable></PrivateRoute>} />
 
-      {/* Protected App */}
-      <Route element={<PrivateRoute><OnboardingGate><AppLayout /></OnboardingGate></PrivateRoute>}>
-        <Route index                     element={<Dashboard />} />
-        <Route path="expenses"           element={<Expenses />} />
-        <Route path="income"             element={<Income />} />
-        <Route path="goals"              element={<Goals />} />
-        <Route path="strategy"           element={<Strategy />} />
-        <Route path="upi"                element={<Navigate to="/expenses" replace />} />
-        <Route path="analytics"          element={<Analytics />} />
-        <Route path="statistics"         element={<Analytics />} />
-        <Route path="notifications"      element={<Notifications />} />
-        <Route path="settings"           element={<Settings />} />
-      </Route>
+    {/* Protected App */}
+    <Route element={<PrivateRoute><OnboardingGate><AppLayout /></OnboardingGate></PrivateRoute>}>
+      <Route index                     element={<Loadable><Dashboard /></Loadable>} />
+      <Route path="expenses"           element={<Loadable><Expenses /></Loadable>} />
+      <Route path="income"             element={<Loadable><Income /></Loadable>} />
+      <Route path="goals"              element={<Loadable><Goals /></Loadable>} />
+      <Route path="strategy"           element={<Loadable><Strategy /></Loadable>} />
+      <Route path="upi"                element={<Navigate to="/expenses" replace />} />
+      <Route path="analytics"          element={<Loadable><Analytics /></Loadable>} />
+      <Route path="statistics"         element={<Loadable><Analytics /></Loadable>} />
+      <Route path="notifications"      element={<Loadable><Notifications /></Loadable>} />
+      <Route path="settings"           element={<Loadable><Settings /></Loadable>} />
+    </Route>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  </Suspense>
+    <Route path="*" element={<Navigate to="/" replace />} />
+  </Routes>
 );

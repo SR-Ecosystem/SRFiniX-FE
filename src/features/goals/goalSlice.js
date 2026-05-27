@@ -20,11 +20,15 @@ export const deleteGoal = createAsyncThunk('goals/delete', async (id, { rejectWi
 
 const goalSlice = createSlice({
   name: 'goals',
-  initialState: { list: [], isLoading: false, error: null },
+  initialState: { list: [], queryKey: null, isLoading: false, error: null },
   reducers: {},
   extraReducers: (b) => {
     b.addCase(fetchGoals.pending, (s) => { s.isLoading = true; });
-    b.addCase(fetchGoals.fulfilled, (s, a) => { s.isLoading = false; s.list = a.payload.goals; });
+    b.addCase(fetchGoals.fulfilled, (s, a) => {
+      s.isLoading = false;
+      s.list = a.payload.goals;
+      s.queryKey = JSON.stringify(a.meta.arg || {});
+    });
     b.addCase(createGoal.fulfilled, (s, a) => { s.list.unshift(a.payload.goal); });
     b.addCase(contributeToGoal.fulfilled, (s, a) => { const i = s.list.findIndex((g) => g._id === a.payload.goal._id); if (i > -1) s.list[i] = a.payload.goal; });
     b.addCase(deleteGoal.fulfilled, (s, a) => { s.list = s.list.filter((g) => g._id !== a.payload); });

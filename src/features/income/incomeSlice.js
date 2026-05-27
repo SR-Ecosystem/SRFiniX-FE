@@ -16,11 +16,16 @@ export const deleteIncome = createAsyncThunk('income/delete', async (id, { rejec
 
 const incomeSlice = createSlice({
   name: 'income',
-  initialState: { list: [], total: 0, isLoading: false, error: null },
+  initialState: { list: [], total: 0, periodKey: null, isLoading: false, error: null },
   reducers: {},
   extraReducers: (b) => {
     b.addCase(fetchIncome.pending, (s) => { s.isLoading = true; });
-    b.addCase(fetchIncome.fulfilled, (s, a) => { s.isLoading = false; s.list = a.payload.incomes; s.total = a.payload.total; });
+    b.addCase(fetchIncome.fulfilled, (s, a) => {
+      s.isLoading = false;
+      s.list = a.payload.incomes;
+      s.total = a.payload.total;
+      s.periodKey = `${a.meta.arg?.year || ''}-${a.meta.arg?.month || ''}`;
+    });
     b.addCase(addIncome.fulfilled, (s, a) => { s.list.unshift(a.payload.income); s.total += a.payload.income.amount; });
     b.addCase(deleteIncome.fulfilled, (s, a) => { s.list = s.list.filter((i) => i._id !== a.payload); });
   },

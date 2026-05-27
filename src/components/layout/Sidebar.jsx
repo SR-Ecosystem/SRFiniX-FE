@@ -95,9 +95,17 @@ export const Sidebar = ({ isOpen }) => {
           <div className="p-3">
             <div className="bg-bg-tertiary rounded-xl p-3">
               <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-purple to-accent-green flex items-center justify-center font-bold text-xs text-white flex-shrink-0">
-                  {initials}
-                </div>
+                {user?.avatarUrl || user?.avatar ? (
+                  <img
+                    src={user.avatarUrl || user.avatar}
+                    alt={user?.name || 'Profile'}
+                    className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-purple to-accent-green flex items-center justify-center font-bold text-xs text-white flex-shrink-0">
+                    {initials}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{user?.name}</p>
                   <p className="text-[11px] text-text-secondary truncate">{user?.email}</p>

@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AlertTriangle, Bell, CheckCircle2, CreditCard, Flag, Info, Target, Trash2 } from 'lucide-react';
-import { deleteNotification, fetchNotifications, markAllRead, markRead } from '../features/notifications/notificationSlice';
-import { Button, EmptyState, Spinner } from '../components/ui/index';
+import { deleteAllNotifications, deleteNotification, fetchNotifications, markAllRead, markRead } from '../features/notifications/notificationSlice';
+import { Button, EmptyState, ComponentLoader, ConfirmDialog, Spinner } from '../components/ui/index';
 import { timeAgo } from '../utils/formatters';
+import toast from 'react-hot-toast';
 
 const TYPE_META = {
   overspending: { icon: AlertTriangle, color: '#FF4B6B', bg: 'rgba(255,75,107,0.1)' },
@@ -22,26 +23,68 @@ const TYPE_META = {
 export default function Notifications() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { list, unreadCount, isLoading, error } = useSelector((s) => s.notifications);
+  const { list, unreadCount, loaded, isLoading, error } = useSelector((s) => s.notifications);
+  const [deletingId, setDeletingId] = useState('');
+  const [deletingAll, setDeletingAll] = useState(false);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   useEffect(() => {
-    dispatch(fetchNotifications());
-  }, [dispatch]);
+    if (!loaded) dispatch(fetchNotifications());
+  }, [dispatch, loaded]);
 
-  const handleMarkAllRead = () => dispatch(markAllRead());
+  const handleMarkAllRead = async () => {
+    await dispatch(markAllRead());
+    dispatch(fetchNotifications());
+  };
 
   const handleOpen = async (notification) => {
-    if (!notification.isRead) await dispatch(markRead(notification._id));
+    if (!notification.isRead) {
+      await dispatch(markRead(notification._id));
+      dispatch(fetchNotifications());
+    }
     if (notification.actionUrl) navigate(notification.actionUrl);
   };
 
   const handleDelete = async (event, id) => {
     event.stopPropagation();
-    await dispatch(deleteNotification(id));
+    setDeletingId(id);
+    try {
+      const res = await dispatch(deleteNotification(id));
+      if (deleteNotification.fulfilled.match(res)) toast.success('Notification deleted.');
+      else toast.error('Failed to delete notification.');
+      dispatch(fetchNotifications());
+    } finally {
+      setDeletingId('');
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    setDeletingAll(true);
+    try {
+      const res = await dispatch(deleteAllNotifications());
+      if (deleteAllNotifications.fulfilled.match(res)) {
+        toast.success('All notifications deleted.');
+        setConfirmDeleteAll(false);
+        return;
+      } else {
+        toast.error(res.payload || 'Failed to delete notifications.');
+      }
+    } finally {
+      setDeletingAll(false);
+    }
   };
 
   return (
     <div className="max-w-2xl space-y-5">
+      <ConfirmDialog
+        isOpen={confirmDeleteAll}
+        title="Delete all notifications?"
+        description="This will permanently remove every notification from your account."
+        confirmLabel="Delete all"
+        tone="danger"
+        onClose={() => setConfirmDeleteAll(false)}
+        onConfirm={handleDeleteAll}
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-display font-bold text-xl">Notifications</h2>
@@ -49,11 +92,18 @@ export default function Notifications() {
             {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
           </p>
         </div>
-        {unreadCount > 0 && (
-          <Button variant="secondary" size="sm" onClick={handleMarkAllRead}>
-            Mark all read
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {unreadCount > 0 && (
+            <Button variant="secondary" size="sm" onClick={handleMarkAllRead}>
+              Mark all read
+            </Button>
+          )}
+          {list.length > 0 && (
+            <Button variant="danger" size="sm" onClick={() => setConfirmDeleteAll(true)} loading={deletingAll}>
+              Delete all
+            </Button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -63,7 +113,7 @@ export default function Notifications() {
       )}
 
       {isLoading ? (
-        <div className="flex items-center justify-center h-40"><Spinner /></div>
+        <ComponentLoader label="Loading notifications..." />
       ) : list.length === 0 ? (
         <div className="card">
           <EmptyState
@@ -73,21 +123,30 @@ export default function Notifications() {
           />
         </div>
       ) : (
-        <div className="card divide-y divide-white/[0.05] p-0 overflow-hidden">
+        <div className="card relative divide-y divide-white/[0.05] p-0 overflow-hidden">
+          {deletingAll && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-bg-secondary/75 backdrop-blur-sm">
+              <Spinner />
+              <p className="text-xs font-medium text-text-muted">Deleting notifications...</p>
+            </div>
+          )}
           {list.map((notification, index) => {
             const meta = TYPE_META[notification.type] || TYPE_META.system;
             const Icon = meta.icon;
 
             return (
-              <motion.button
-                type="button"
+              <motion.div
                 key={notification._id}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.04 }}
-                onClick={() => handleOpen(notification)}
-                className={`flex w-full cursor-pointer items-start gap-4 p-4 text-left group transition-colors hover:bg-white/[0.03] ${!notification.isRead ? 'bg-white/[0.02]' : ''}`}
+                className={`relative flex w-full cursor-pointer items-start gap-4 p-4 text-left group transition-colors hover:bg-white/[0.03] ${!notification.isRead ? 'bg-white/[0.02]' : ''} ${deletingId === notification._id ? 'opacity-70' : ''}`}
               >
+                {deletingId === notification._id && (
+                  <span className="absolute inset-0 z-10 flex items-center justify-center bg-bg-secondary/60 backdrop-blur-sm">
+                    <Spinner size="sm" />
+                  </span>
+                )}
                 <span
                   className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
                   style={{ background: meta.bg, color: meta.color }}
@@ -95,7 +154,7 @@ export default function Notifications() {
                   <Icon size={20} />
                 </span>
 
-                <span className="flex-1 min-w-0">
+                <button type="button" onClick={() => handleOpen(notification)} className="flex-1 min-w-0 text-left">
                   <span className="flex items-start justify-between gap-2">
                     <span className={`text-sm font-medium ${!notification.isRead ? 'text-text-primary' : 'text-text-secondary'}`}>
                       {notification.title}
@@ -106,21 +165,18 @@ export default function Notifications() {
                   </span>
                   <span className="block text-xs text-text-muted mt-1 leading-relaxed">{notification.message}</span>
                   <span className="block text-[11px] text-text-muted mt-1.5">{timeAgo(notification.createdAt)}</span>
-                </span>
+                </button>
 
-                <span
-                  role="button"
-                  tabIndex={0}
+                <button
+                  type="button"
                   onClick={(event) => handleDelete(event, notification._id)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') handleDelete(event, notification._id);
-                  }}
+                  disabled={!!deletingId || deletingAll}
                   className="opacity-100 md:opacity-0 group-hover:opacity-100 text-text-muted hover:text-accent-red transition-all flex-shrink-0 mt-1"
                   aria-label="Delete notification"
                 >
                   <Trash2 size={16} />
-                </span>
-              </motion.button>
+                </button>
+              </motion.div>
             );
           })}
         </div>

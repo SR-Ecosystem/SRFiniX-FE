@@ -3,14 +3,15 @@ import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { completeOnboarding } from '../features/auth/authSlice';
-import { BrandLogo, Button, Input, Select } from '../components/ui/index';
+import { BrandLogo, Button, IconBadge, Input, Select } from '../components/ui/index';
+import { formatCurrency, parseMoneyInput } from '../utils/formatters';
 
 const STEPS = ['Profile', 'Income', 'Strategy', 'Done'];
 
 const STRATEGIES = [
-  { name: '50-30-20', desc: 'Needs · Wants · Savings', divisions: [{label:'Needs',percentage:50,color:'#00E5A0'},{label:'Wants',percentage:30,color:'#7B6EF6'},{label:'Savings',percentage:20,color:'#F7931A'}] },
-  { name: '60-20-20', desc: 'Needs · Savings · Wants', divisions: [{label:'Needs',percentage:60,color:'#00E5A0'},{label:'Savings',percentage:20,color:'#F7931A'},{label:'Wants',percentage:20,color:'#7B6EF6'}] },
-  { name: '70-20-10', desc: 'Needs · Savings · Invest', divisions: [{label:'Needs',percentage:70,color:'#00E5A0'},{label:'Savings',percentage:20,color:'#F7931A'},{label:'Investments',percentage:10,color:'#3E8EFF'}] },
+  { name: '50-30-20', desc: 'Needs / Wants / Savings', divisions: [{label:'Needs',percentage:50,color:'#00E5A0'},{label:'Wants',percentage:30,color:'#7B6EF6'},{label:'Savings',percentage:20,color:'#F7931A'}] },
+  { name: '60-20-20', desc: 'Needs / Savings / Wants', divisions: [{label:'Needs',percentage:60,color:'#00E5A0'},{label:'Savings',percentage:20,color:'#F7931A'},{label:'Wants',percentage:20,color:'#7B6EF6'}] },
+  { name: '70-20-10', desc: 'Needs / Savings / Invest', divisions: [{label:'Needs',percentage:70,color:'#00E5A0'},{label:'Savings',percentage:20,color:'#F7931A'},{label:'Investments',percentage:10,color:'#3E8EFF'}] },
 ];
 
 export default function Onboarding() {
@@ -50,7 +51,7 @@ export default function Onboarding() {
             {STEPS.map((s, i) => (
               <div key={i} className="flex items-center gap-2">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${i <= step ? 'bg-accent-green text-black' : 'bg-bg-tertiary text-text-muted'}`}>
-                  {i < step ? '✓' : i + 1}
+                  {i < step ? 'Done' : i + 1}
                 </div>
                 {i < STEPS.length - 1 && <div className={`w-8 h-0.5 ${i < step ? 'bg-accent-green' : 'bg-bg-tertiary'}`} />}
               </div>
@@ -121,7 +122,7 @@ export default function Onboarding() {
                     >
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-display font-semibold">{s.name}</span>
-                        {form.strategyName === s.name && <span className="text-accent-green text-sm">✓ Selected</span>}
+                        {form.strategyName === s.name && <span className="text-accent-green text-sm">Selected</span>}
                       </div>
                       <p className="text-xs text-text-secondary mb-3">{s.desc}</p>
                       <div className="flex gap-1 h-2">
@@ -142,14 +143,14 @@ export default function Onboarding() {
             {/* Step 3: Done */}
             {step === 3 && (
               <motion.div key="s3" variants={slideVariants} initial="enter" animate="center" exit="exit" transition={{ duration: 0.25 }} className="text-center py-4">
-                <div className="text-6xl mb-4">🎉</div>
+                <IconBadge icon="check" color="#00E5A0" className="mx-auto mb-4 h-16 w-16 rounded-2xl" iconClassName="h-8 w-8" />
                 <h2 className="font-display font-bold text-2xl mb-2">You're all set!</h2>
                 <p className="text-text-secondary text-sm mb-2">
                   Strategy: <span className="text-accent-green font-semibold">{form.strategyName}</span>
                 </p>
                 {form.monthlyGrossIncome && (
                   <p className="text-text-secondary text-sm mb-6">
-                    Income: <span className="text-text-primary font-semibold">₹{Number(form.monthlyGrossIncome).toLocaleString('en-IN')}/month</span>
+                    Income: <span className="text-text-primary font-semibold">{formatCurrency(parseMoneyInput(form.monthlyGrossIncome))}/month</span>
                   </p>
                 )}
                 <div className="bg-bg-tertiary rounded-xl p-4 mb-6 text-left space-y-2">
@@ -159,12 +160,12 @@ export default function Onboarding() {
                         <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
                         <span className="text-text-secondary">{d.label}</span>
                       </div>
-                      <span className="font-semibold">{d.percentage}% · ₹{Math.round((d.percentage / 100) * (Number(form.monthlyGrossIncome) + Number(form.sideIncome || 0))).toLocaleString('en-IN')}</span>
+                      <span className="font-semibold">{d.percentage}% / {formatCurrency((d.percentage / 100) * (parseMoneyInput(form.monthlyGrossIncome) + parseMoneyInput(form.sideIncome || 0)))}</span>
                     </div>
                   ))}
                 </div>
                 <Button onClick={handleFinish} loading={isLoading} className="w-full justify-center">
-                  Launch Dashboard 🚀
+                  Launch Dashboard
                 </Button>
               </motion.div>
             )}
